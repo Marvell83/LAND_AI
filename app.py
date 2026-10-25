@@ -21,8 +21,13 @@ from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, disco
 from land_radar.providers.aygm_rail import AYGMRailProviderError, fetch_rail_projects, filter_project_keywords, record_to_catalyst as rail_record_to_catalyst
 from land_radar.providers.osbuk import OSBUKProviderError, fetch_osb_list, filter_provinces, record_to_catalyst
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
+from land_radar.providers.osm_geometry import OSMGeometryProviderError, best_name_matches, fetch_industrial_geometries, fetch_rail_geometries, to_geometry_evidence
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
 from land_radar.scoring import score_cell
+from land_radar.spatial.catalyst_geometry import link_catalyst_to_cell
+from land_radar.spatial.distance import distance_from_cell_to_geometry
+from land_radar.spatial.geometry import geometry_from_geojson
+from land_radar.spatial.influence import classify_influence
 from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 
 
@@ -36,8 +41,15 @@ st.info(
     "Fiyat verisi yoksa mispricing yoktur. Kanıt yoksa AI yorum yapmaz."
 )
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs(
-    ["Pilot Grid", "Live Data Probe", "Price Lab", "Research Lab", "Data Sources"]
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    [
+        "Pilot Grid",
+        "Live Data Probe",
+        "Spatial Intelligence",
+        "Price Lab",
+        "Research Lab",
+        "Data Sources",
+    ]
 )
 
 with tab1:
@@ -476,6 +488,230 @@ with tab2:
             st.error(str(exc))
 
 with tab3:
+    st.subheader("Spatial Intelligence")
+    st.caption(
+        "Katalizör statüsü ile katalizör geometrisi ayrı kanıt olarak tutulur. "
+        "OSM yalnız geometri bağlamıdır; OSBÜK/AYGM resmî statüsünün yerine geçmez."
+    )
+
+    s1, s2, s3 = st.columns(3)
+    spatial_km = s1.select_slider(
+        "Spatial hücre boyutu (km)",
+        options=[1.0, 2.0, 5.0, 10.0],
+        value=5.0,
+        key="spatial_cell_km",
+    )
+    spatial_cells = build_pilot_grid(spatial_km)
+    spatial_index = int(
+        s2.number_input(
+            "Spatial hücre sıra numarası",
+            min_value=0,
+            max_value=max(0, len(spatial_cells) - 1),
+            value=0,
+            step=1,
+            key="spatial_cell_index",
+        )
+    )
+    padding_km = float(
+        s3.number_input(
+            "Geometri arama tamponu (km)",
+            min_value=1.0,
+            max_value=50.0,
+            value=20.0,
+            step=1.0,
+        )
+    )
+
+    spatial_cell = spatial_cells[spatial_index]
+    spatial_bbox = bbox_for_cell(spatial_cell)
+    search_bbox = bbox_for_cell(spatial_cell, padding_km=padding_km)
+
+    st.write(
+        {
+            "cell_id": spatial_cell.cell_id,
+            "center_lat": spatial_cell.center_lat,
+            "center_lon": spatial_cell.center_lon,
+            "cell_bbox": [round(v, 6) for v in spatial_bbox],
+            "search_bbox": [round(v, 6) for v in search_bbox],
+        }
+    )
+
+    st.map(
+        pd.DataFrame(
+            [
+                {
+                    "lat": spatial_cell.center_lat,
+                    "lon": spatial_cell.center_lon,
+                }
+            ]
+        ),
+        latitude="lat",
+        longitude="lon",
+    )
+
+    def _spatial_rows(features):
+        rows = []
+        map_rows = [
+            {
+                "kind": "cell",
+                "name": spatial_cell.cell_id,
+                "lat": spatial_cell.center_lat,
+                "lon": spatial_cell.center_lon,
+            }
+        ]
+        for feature in features:
+            evidence = to_geometry_evidence(feature)
+            distance = distance_from_cell_to_geometry(spatial_cell, evidence)
+            band = classify_influence(
+                distance.distance_km,
+                intersects_cell=distance.intersects_cell,
+            )
+            geom = geometry_from_geojson(feature.geometry_geojson)
+            centroid = geom.centroid
+            rows.append(
+                {
+                    "name": feature.name,
+                    "osm_id": feature.feature_id,
+                    "geometry_role": feature.geometry_role,
+                    "geometry_confidence": feature.confidence,
+                    "distance_km": distance.distance_km,
+                    "intersects_cell": distance.intersects_cell,
+                    "influence": band.code,
+                    "influence_label": band.label,
+                    "railway": feature.tags.get("railway"),
+                    "landuse": feature.tags.get("landuse"),
+                    "industrial": feature.tags.get("industrial"),
+                }
+            )
+            map_rows.append(
+                {
+                    "kind": "feature",
+                    "name": feature.name,
+                    "lat": float(centroid.y),
+                    "lon": float(centroid.x),
+                }
+            )
+        rows.sort(key=lambda row: row["distance_km"])
+        return rows, map_rows
+
+    left_spatial, right_spatial = st.columns(2)
+
+    with left_spatial:
+        st.markdown("#### OSM sanayi geometrileri")
+        if st.button("Yakındaki sanayi geometrilerini getir", use_container_width=True):
+            try:
+                industrial_features = fetch_industrial_geometries(search_bbox)
+                industrial_rows, industrial_map = _spatial_rows(industrial_features)
+                st.success(f"{len(industrial_rows)} isimli sanayi geometrisi bulundu.")
+                if industrial_rows:
+                    st.map(
+                        pd.DataFrame(industrial_map),
+                        latitude="lat",
+                        longitude="lon",
+                    )
+                    st.dataframe(
+                        pd.DataFrame(industrial_rows).head(100),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("Bu arama alanında isimli sanayi geometrisi bulunmadı.")
+            except OSMGeometryProviderError as exc:
+                st.error(str(exc))
+
+    with right_spatial:
+        st.markdown("#### OSM demiryolu geometrileri")
+        if st.button("Yakındaki demiryolu geometrilerini getir", use_container_width=True):
+            try:
+                rail_features = fetch_rail_geometries(search_bbox)
+                rail_rows, rail_map = _spatial_rows(rail_features)
+                st.success(f"{len(rail_rows)} demiryolu geometrisi bulundu.")
+                if rail_rows:
+                    st.map(
+                        pd.DataFrame(rail_map),
+                        latitude="lat",
+                        longitude="lon",
+                    )
+                    st.dataframe(
+                        pd.DataFrame(rail_rows).head(100),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                else:
+                    st.info("Bu arama alanında demiryolu geometrisi bulunmadı.")
+            except OSMGeometryProviderError as exc:
+                st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### OSB statüsü + geometri kanıtı eşleştirme")
+    st.caption(
+        "Bu otomatik eşleştirme yalnız aday üretir. İsim benzerliği ve geometri kaynağı "
+        "ayrı gösterilir; düşük benzerlikler resmî eşleşme sayılmaz."
+    )
+    if st.button("Yakındaki OSB adaylarını eşleştir", use_container_width=True):
+        try:
+            industrial_features = fetch_industrial_geometries(search_bbox)
+            osb_records = filter_provinces(
+                fetch_osb_list(),
+                ["Sakarya", "Bursa", "Balıkesir", "Çanakkale"],
+            )
+            linked_rows = []
+            for record in osb_records:
+                matches = best_name_matches(
+                    f"{record.province} {record.name}",
+                    industrial_features,
+                    minimum_score=0.40,
+                    limit=1,
+                )
+                if not matches:
+                    continue
+
+                feature, similarity = matches[0]
+                catalyst = record_to_catalyst(record)
+                geometry_evidence = to_geometry_evidence(feature)
+                link = link_catalyst_to_cell(
+                    catalyst,
+                    geometry_evidence,
+                    spatial_cell,
+                )
+                linked_rows.append(
+                    {
+                        "osb": record.name,
+                        "province": record.province,
+                        "official_status": record.status,
+                        "catalyst_stage": link.catalyst_stage,
+                        "status_confidence": link.status_evidence_confidence,
+                        "osm_feature": feature.name,
+                        "name_similarity": similarity,
+                        "geometry_role": feature.geometry_role,
+                        "geometry_confidence": link.geometry_confidence,
+                        "distance_km": link.distance_km,
+                        "influence": link.influence_code,
+                        "evidence_complete": link.evidence_complete,
+                    }
+                )
+
+            linked_rows.sort(
+                key=lambda row: (
+                    -row["name_similarity"],
+                    row["distance_km"],
+                )
+            )
+            if linked_rows:
+                st.dataframe(
+                    pd.DataFrame(linked_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            else:
+                st.info(
+                    "Bu hücre çevresindeki OSM sanayi isimleriyle güvenli bir OSB isim eşleşmesi bulunmadı."
+                )
+        except (OSMGeometryProviderError, OSBUKProviderError, ValueError) as exc:
+            st.error(str(exc))
+
+
+with tab4:
     st.subheader("Emsal Fiyat Laboratuvarı")
     st.caption(
         "Bu ekran emsal veri dağılımını analiz eder. Sonuç 'gerçek değer' veya "
@@ -690,7 +926,7 @@ with tab3:
             st.error(str(exc))
 
 
-with tab4:
+with tab5:
     st.subheader("Araştırma laboratuvarı")
     st.caption(
         "Buradaki girişler manuel senaryo testidir; gerçek bölge verisi değildir. "
@@ -767,7 +1003,7 @@ with tab4:
             "yatırım modeli olarak kabul edilmez."
         )
 
-with tab5:
+with tab6:
     st.subheader("Veri kaynağı kayıt defteri")
     st.dataframe(
         [
