@@ -17,7 +17,7 @@ SOURCES = (
     DataSource("Copernicus Data Space / Sentinel-2 L2A", "satellite", "Scene discovery plus two-period spectral/SCL change", "spectral_engine_ready"),
     DataSource("Copernicus DEM GLO-90", "terrain", "Elevation and slope", "oauth_adapter_ready"),
     DataSource("OpenStreetMap / Overpass", "access", "Road and accessibility context", "probe_integrated"),
-    DataSource("OSB official data", "catalyst", "Industrial zones and expansion evidence", "planned"),
+    DataSource("OSBÜK OSB listesi", "catalyst", "Current OSB status feed and stage mapping", "status_feed_ready"),
     DataSource("KGM official data", "catalyst", "Road infrastructure evidence", "planned"),
     DataSource("TCDD / UAB official data", "catalyst", "Rail and transport evidence", "planned"),
     DataSource("Municipal / e-Plan sources", "planning", "Planning decisions and maturity", "planned"),
