@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+import json
 from pathlib import Path
 
 import pandas as pd
@@ -24,10 +25,12 @@ from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.providers.osm_geometry import OSMGeometryProviderError, best_name_matches, fetch_industrial_geometries, fetch_rail_geometries, to_geometry_evidence
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
 from land_radar.scoring import score_cell
+from land_radar.spatial.batch import batch_link_catalysts
 from land_radar.spatial.catalyst_geometry import link_catalyst_to_cell
 from land_radar.spatial.distance import distance_from_cell_to_geometry
 from land_radar.spatial.geometry import geometry_from_geojson
 from land_radar.spatial.influence import classify_influence
+from land_radar.spatial.registry import registry_from_feature_collection, registry_to_feature_collection
 from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 
 
@@ -709,6 +712,172 @@ with tab3:
                 )
         except (OSMGeometryProviderError, OSBUKProviderError, ValueError) as exc:
             st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### Geometry Registry · GeoJSON")
+    st.caption(
+        "Resmî veya manuel doğrulanmış geometriyi katalizör kimliğiyle saklamak için. "
+        "Registry geometrisi statü kanıtının yerine geçmez."
+    )
+
+    registry_template = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [29.0, 40.0],
+                },
+                "properties": {
+                    "catalyst_id": "osb:il:osb-adi",
+                    "source": "official-or-manual-source",
+                    "feature_name": "OSB adı",
+                    "observed_date": date.today().isoformat(),
+                    "source_url": None,
+                    "feature_id": "source-feature-id",
+                    "confidence": 90,
+                    "geometry_role": "official_boundary_or_point",
+                    "manual_verified": False,
+                },
+            }
+        ],
+    }
+    st.download_button(
+        "Geometry Registry GeoJSON şablonunu indir",
+        data=json.dumps(
+            registry_template,
+            ensure_ascii=False,
+            indent=2,
+        ).encode("utf-8"),
+        file_name="land_radar_geometry_registry_template.geojson",
+        mime="application/geo+json",
+    )
+
+    registry_upload = st.file_uploader(
+        "Geometry Registry GeoJSON yükle",
+        type=["geojson", "json"],
+        key="geometry_registry_upload",
+    )
+
+    if registry_upload is not None:
+        try:
+            registry_payload = json.load(registry_upload)
+            registry_entries = registry_from_feature_collection(
+                registry_payload
+            )
+            st.success(f"{len(registry_entries)} geometri registry kaydı doğrulandı.")
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "catalyst_id": entry.catalyst_id,
+                            "feature_name": entry.evidence.feature_name,
+                            "source": entry.evidence.source,
+                            "geometry_role": entry.evidence.geometry_role,
+                            "geometry_confidence": entry.evidence.confidence,
+                            "manual_verified": entry.manual_verified,
+                            "observed_date": entry.evidence.observed_date,
+                        }
+                        for entry in registry_entries
+                    ]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            batch_limit = st.select_slider(
+                "Registry batch hücre sayısı",
+                options=[25, 50, 100, 250],
+                value=50,
+                key="registry_batch_limit",
+            )
+            batch_max_distance = st.slider(
+                "Batch azami katalizör mesafesi (km)",
+                min_value=1,
+                max_value=50,
+                value=20,
+                key="registry_batch_distance",
+            )
+
+            if st.button(
+                "Registry'yi pilot hücrelere bağla",
+                use_container_width=True,
+            ):
+                catalyst_map = {}
+
+                try:
+                    for record in filter_provinces(
+                        fetch_osb_list(),
+                        ["Sakarya", "Bursa", "Balıkesir", "Çanakkale"],
+                    ):
+                        catalyst = record_to_catalyst(record)
+                        catalyst_map[catalyst.catalyst_id] = catalyst
+                except OSBUKProviderError as exc:
+                    st.warning(f"OSBÜK katalizörleri alınamadı: {exc}")
+
+                try:
+                    for record in fetch_rail_projects():
+                        catalyst = rail_record_to_catalyst(record)
+                        catalyst_map[catalyst.catalyst_id] = catalyst
+                except AYGMRailProviderError as exc:
+                    st.warning(f"AYGM katalizörleri alınamadı: {exc}")
+
+                batch_result = batch_link_catalysts(
+                    spatial_cells[:batch_limit],
+                    catalyst_map,
+                    registry_entries,
+                    max_distance_km=float(batch_max_distance),
+                )
+
+                link_rows = [
+                    {
+                        "cell_id": link.cell_id,
+                        "catalyst_id": link.catalyst_id,
+                        "catalyst_name": link.catalyst_name,
+                        "category": link.catalyst_category,
+                        "stage": link.catalyst_stage,
+                        "status_confidence": link.status_evidence_confidence,
+                        "geometry_source": link.geometry_source,
+                        "geometry_confidence": link.geometry_confidence,
+                        "distance_km": link.distance_km,
+                        "intersects": link.intersects_cell,
+                        "influence": link.influence_code,
+                    }
+                    for link in batch_result.links
+                ]
+                if link_rows:
+                    st.dataframe(
+                        pd.DataFrame(link_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+                    st.download_button(
+                        "Spatial batch sonuçlarını CSV indir",
+                        data=pd.DataFrame(link_rows)
+                        .to_csv(index=False)
+                        .encode("utf-8-sig"),
+                        file_name="land_radar_spatial_links.csv",
+                        mime="text/csv",
+                    )
+                else:
+                    st.info(
+                        "Seçilen hücre/mesafe sınırında registry katalizör bağlantısı bulunmadı."
+                    )
+
+                if batch_result.missing_catalysts:
+                    st.warning(
+                        "Registry'de olup mevcut statü akışında bulunmayan catalyst_id: "
+                        + ", ".join(batch_result.missing_catalysts[:20])
+                    )
+                if batch_result.missing_geometries:
+                    st.caption(
+                        "Statüsü olup registry geometrisi bulunmayan katalizör sayısı: "
+                        f"{len(batch_result.missing_geometries)}"
+                    )
+
+        except (ValueError, json.JSONDecodeError) as exc:
+            st.error(f"Geometry Registry okunamadı: {exc}")
 
 
 with tab4:
