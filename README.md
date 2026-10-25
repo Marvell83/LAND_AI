@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.16
+## v0.17
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -74,6 +74,12 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - MEDIUM/HIGH güven eşiğiyle `price_known`
 - fiyat alt-kanıtının Evidence Packet entegrasyonu
 - 30→10 Evidence Gate: eksik kritik kanıt varsa daraltmayı bloke eder
+- e-Plan lifecycle / point-in-time Plan Evidence Registry
+- resmî plan CSV importer
+- Top-30 Planning Evidence Scan
+- doğrulanmış TUCBS/ULASAV bölgesel ÇDP WMS registry
+- FINALIZED + spatially verified UIP/NIP kuralıyla `planning_legal.known`
+- planning kanıtının Evidence Packet ve Top-10 Gate entegrasyonu
 - evidence coverage yalnız veri kapsamı olarak hesaplanır; yatırım puanı değildir
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
@@ -130,13 +136,14 @@ pytest -q
 19. Tarım ve Orman protected-area + USBS flood direct services ✅
 20. Top-30 comparable-price evidence scan ✅
 21. 30→10 Evidence Gate ✅
-22. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-23. KGM stratejik karayolu proje akışı
-24. e-Plan / active-zoning güvenilir kanıt adaptörü
-25. AFAD/TUCBS heyelan ve diğer resmî risk servisleri
-26. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-27. Backtest ve ağırlık kalibrasyonu
-28. Gate sonrası evidence-based Top-10 review → parsel elemesi
+22. Planning Intelligence / e-Plan evidence registry ✅
+23. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+24. KGM stratejik karayolu proje akışı
+25. e-Plan public interface için stabil otomatik vektör/veri adaptörü bulunursa doğrudan entegrasyon
+26. AFAD/TUCBS heyelan ve diğer resmî risk servisleri
+27. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+28. Backtest ve ağırlık kalibrasyonu
+29. Gate sonrası evidence-based Top-10 review → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -288,6 +295,25 @@ python scripts/selection_gate.py --target 10
 Eksik kritik kanıt varsa sistem Top-10 daraltmasını bilinçli olarak bloke eder; puan veya otomatik yatırım sıralaması üretmez.
 
 Detay: [docs/SELECTION_GATE.md](docs/SELECTION_GATE.md)
+
+Planning Intelligence:
+
+```bash
+bash PLAN_KANIT_TOP30.sh
+```
+
+Resmî e-Plan/belediye plan kaydını CSV'den registry'ye almak için:
+
+```bash
+python scripts/import_plan_evidence.py --csv data/processed/plans.csv
+python scripts/planning_scan.py
+python scripts/build_evidence_packets.py
+bash TOP10_GATE.sh
+```
+
+`planning_legal.known` yalnız tarih-kesitinde geçerli, FINALIZED, spatially verified UIP/NIP kanıtıyla açılır. Bölgesel ÇDP WMS kapsamı tek başına imar hakkı sayılmaz.
+
+Detay: [docs/PLANNING_INTELLIGENCE.md](docs/PLANNING_INTELLIGENCE.md)
 
 ## Veri kurulumu
 
