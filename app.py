@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from pathlib import Path
 
+import pandas as pd
 import streamlit as st
 
 from land_radar.catalyst import STAGE_LABELS
@@ -54,16 +55,19 @@ with tab1:
         "Bu aşamada hücrelerde otomatik yatırım skoru yoktur. "
         "V0.2 gerçek kaynaklara kontrollü probe yapar; toplu tarama henüz kapalıdır."
     )
+    pilot_rows = [
+        {
+            "cell_id": c.cell_id,
+            "lat": c.center_lat,
+            "lon": c.center_lon,
+            "size_km": c.size_km,
+        }
+        for c in cells[:500]
+    ]
+    pilot_df = pd.DataFrame(pilot_rows)
+    st.map(pilot_df, latitude="lat", longitude="lon")
     st.dataframe(
-        [
-            {
-                "cell_id": c.cell_id,
-                "center_lat": c.center_lat,
-                "center_lon": c.center_lon,
-                "size_km": c.size_km,
-            }
-            for c in cells[:100]
-        ],
+        pilot_df.head(100),
         use_container_width=True,
         hide_index=True,
     )
@@ -433,26 +437,37 @@ with tab2:
             )
             ranked = rank_accelerating(scan_records)
             st.success(f"{len(scan_records)} hücre tarandı.")
+            ranked_rows = [
+                {
+                    "rank": i + 1,
+                    "cell_id": r.cell_id,
+                    "lat": r.center_lat,
+                    "lon": r.center_lon,
+                    "built_2010_m2": r.built_2010_m2,
+                    "built_2015_m2": r.built_2015_m2,
+                    "built_2020_m2": r.built_2020_m2,
+                    "cagr_10_15_pct": r.cagr_2010_2015_pct,
+                    "cagr_15_20_pct": r.cagr_2015_2020_pct,
+                    "acceleration_pp_year": r.acceleration_pp_per_year,
+                    "occupied_accel_pp": r.occupied_share_acceleration_pp,
+                    "signal": r.signal,
+                }
+                for i, r in enumerate(ranked)
+            ]
+            ranked_df = pd.DataFrame(ranked_rows)
+            top_df = ranked_df.head(30)
+            st.map(top_df, latitude="lat", longitude="lon")
             st.dataframe(
-                [
-                    {
-                        "rank": i + 1,
-                        "cell_id": r.cell_id,
-                        "lat": r.center_lat,
-                        "lon": r.center_lon,
-                        "built_2010_m2": r.built_2010_m2,
-                        "built_2015_m2": r.built_2015_m2,
-                        "built_2020_m2": r.built_2020_m2,
-                        "cagr_10_15_pct": r.cagr_2010_2015_pct,
-                        "cagr_15_20_pct": r.cagr_2015_2020_pct,
-                        "acceleration_pp_year": r.acceleration_pp_per_year,
-                        "occupied_accel_pp": r.occupied_share_acceleration_pp,
-                        "signal": r.signal,
-                    }
-                    for i, r in enumerate(ranked[:30])
-                ],
+                top_df,
                 use_container_width=True,
                 hide_index=True,
+            )
+            st.download_button(
+                "GHSL tarama sonucunu CSV indir",
+                data=ranked_df.to_csv(index=False).encode("utf-8-sig"),
+                file_name="land_radar_ghsl_scan.csv",
+                mime="text/csv",
+                use_container_width=True,
             )
         except (GHSLProviderError, ValueError) as exc:
             st.error(str(exc))
