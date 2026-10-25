@@ -283,3 +283,52 @@ def test_evidence_packet_marks_verified_planning_known(tmp_path: Path):
     assert packet["planning_legal"]["eplan"]["checked"] is True
     assert packet["planning_legal"]["eplan"]["matched_plan_ids"] == "UIP-123"
     assert "planning_legal" not in packet["evidence_coverage"]["missing_layers"]
+
+
+def test_official_flood_and_landslide_can_complete_core_hazard(tmp_path: Path):
+    deep = tmp_path / "deep.csv"
+    pd.DataFrame(
+        [{
+            "cell_id": "A",
+            "center_lat": 40.0,
+            "center_lon": 29.0,
+            "urban_rank": 1,
+            "acceleration_pp_per_year": 5.0,
+            "cagr_2015_2020_pct": 12.0,
+            "p90_slope_deg": 5.0,
+            "nearest_catalyst_km": 4.0,
+            "catalyst_stage_max": 4,
+            "hard_veto": False,
+            "max_hazard_severity": None,
+            "status": "PASS_WITH_GAPS",
+            "reasons": "hazard_unknown",
+        }]
+    ).to_csv(deep, index=False)
+
+    flood = tmp_path / "flood.csv"
+    pd.DataFrame(
+        [{"cell_id": "A", "checked": True, "finding_count": 0, "max_severity": -1}]
+    ).to_csv(flood, index=False)
+
+    landslide = tmp_path / "landslide.csv"
+    pd.DataFrame(
+        [{"cell_id": "A", "checked": True, "finding_count": 0, "max_severity": -1}]
+    ).to_csv(landslide, index=False)
+
+    result = build_evidence_packets(
+        deep_scan_csv=deep,
+        sentinel_csv=None,
+        flood_csv=flood,
+        landslide_csv=landslide,
+        output_dir=tmp_path / "out",
+    )
+    payload = json.loads(
+        Path(result.output_master_json).read_text(encoding="utf-8")
+    )
+    packet = payload["candidates"][0]
+
+    assert packet["hazard"]["known"] is True
+    assert packet["hazard"]["official_flood"]["checked"] is True
+    assert packet["hazard"]["official_landslide_inventory"]["checked"] is True
+    assert packet["hazard"]["core_hazard_coverage"]["known"] is True
+    assert "hazard" not in packet["evidence_coverage"]["missing_layers"]
