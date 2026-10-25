@@ -14,4 +14,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: pytest -q
+      - name: Compile application
+        run: python -m compileall -q app.py land_radar tests
+      - name: Run tests
+        run: pytest -q
