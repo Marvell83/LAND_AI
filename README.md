@@ -25,13 +25,21 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.7
+## v0.8
 
-Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
+Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
 - Streamlit arayüzü
 - Sakarya–Çanakkale pilot grid üretimi
-- OpenStreetMap / Overpass tek-hücre yol probe
+- OpenStreetMap / Overpass yol probe
+- OSM industrial + railway geometry evidence provider
+- hücre → katalizör gerçek minimum mesafe motoru
+- yerel azimuthal-equidistant projeksiyonla metre/km hesaplama
+- configurable spatial influence bands
+- statü kanıtı ile geometri kanıtını ayrı tutan Catalyst Spatial Link
+- OSBÜK resmî OSB durum akışı
+- AYGM/UAB resmî demiryolu proje durum akışı
+- OSBÜK statüsü + OSM geometri adı için kontrollü aday eşleştirme
 - Copernicus STAC üzerinden Sentinel-2 L2A sahne keşfi
 - GHSL GHS-BUILT-S yerel GeoTIFF analizi
 - 2010→2015 ve 2015→2020 built-up büyüme / acceleration motoru
@@ -40,8 +48,6 @@ Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
 - yükseklik ve eğim istatistikleri
 - Sentinel-2 iki dönem NDVI/NDBI/BSI + SCL yüzey değişim motoru
 - kanıt zorunlu 0→6 Catalyst State Machine
-- OSBÜK resmî OSB durum akışı
-- AYGM/UAB resmî demiryolu proje durum akışı
 - pilot grid ve GHSL aday haritaları
 - GHSL batch sonuçlarını CSV dışa aktarma
 - robust emsal fiyat laboratuvarı (CSV)
@@ -50,11 +56,9 @@ Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
 - Windows tek-tık başlatıcı ve güvenli secrets örneği
 - kanıt/evidence veri modeli
 - point-in-time backtest güvenlik altyapısı
-- hard-risk veto mantığı
-- veri kaynağı kayıt defteri
-- GitHub Actions otomatik testleri
+- GitHub Actions compile + test kontrolü
 
-**Henüz gerçek fiyat motoru yoktur. Bu nedenle gerçek lokasyonlar için Mispricing üretilmez.**
+**Otomatik, güvenilir işlem-fiyatı veri hattı henüz yoktur. Bu nedenle gerçek lokasyonlar için kalibre edilmiş Mispricing Score üretilmez.**
 
 ## Kurulum
 
@@ -65,6 +69,12 @@ python -m venv .venv
 
 pip install -r requirements.txt
 streamlit run app.py
+```
+
+Windows'ta alternatif olarak:
+
+```
+LAND_RADAR_BASLAT.bat
 ```
 
 Test:
@@ -84,20 +94,24 @@ pytest -q
 7. OSBÜK + AYGM durum akışları ✅
 8. Emsal fiyat + CPI/reel fiyat laboratuvarı ✅
 9. Evidence-backed risk modeli ✅
-10. OSB/demiryolu güzergâh geometrisi ve hücre eşleştirme
-11. KGM stratejik karayolu proje akışı
-12. Hard-risk resmî coğrafi katmanları
-13. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-14. Backtest ve ağırlık kalibrasyonu
-15. 100 → 30 → 10 → parsel elemesi
+10. Spatial Intelligence / catalyst geometry engine ✅
+11. OSB/demiryolu resmî güzergâh geometrisi veya doğrulanmış geometry registry
+12. KGM stratejik karayolu proje akışı
+13. Hard-risk resmî coğrafi katmanları
+14. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+15. Backtest ve ağırlık kalibrasyonu
+16. 100 → 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
 **Kaynak yoksa katalizör yoktur. Geçmiş veri yoksa ivme yoktur. Fiyat verisi yoksa mispricing yoktur. Kanıt yoksa AI yorum yapmaz.**
 
-Bu yazılım yatırım tavsiyesi vermez; araştırma adaylarını ve bunların lehine/aleyhine kanıtları düzenler.
+Ek spatial kural:
 
+**Katalizör statüsü ile katalizör geometrisi aynı şey değildir.** Örneğin OSB statüsü OSBÜK'ten, sınır/geometri OSM'den geliyorsa iki kaynak ve iki güven seviyesi ayrı tutulur.
+
+Bu yazılım yatırım tavsiyesi vermez; araştırma adaylarını ve bunların lehine/aleyhine kanıtları düzenler.
 
 ## Veri kurulumu
 
-GHSL ve Copernicus veri kurulumu için [docs/DATA_SETUP.md](docs/DATA_SETUP.md) dosyasına; fiyat metodolojisi için [docs/PRICE_MODEL.md](docs/PRICE_MODEL.md) dosyasına bak.
+GHSL ve Copernicus veri kurulumu için [docs/DATA_SETUP.md](docs/DATA_SETUP.md), fiyat metodolojisi için [docs/PRICE_MODEL.md](docs/PRICE_MODEL.md), spatial mimari için [docs/SPATIAL_INTELLIGENCE.md](docs/SPATIAL_INTELLIGENCE.md) dosyasına bak.
