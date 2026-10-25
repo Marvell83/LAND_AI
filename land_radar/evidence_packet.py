@@ -48,12 +48,16 @@ def _reason_set(value: Any) -> set[str]:
     }
 
 
-def _sentinel_by_cell(path: Path | None) -> dict[str, dict]:
+def _table_by_cell(
+    path: Path | None,
+    *,
+    label: str,
+) -> dict[str, dict]:
     if path is None or not path.exists():
         return {}
     frame = pd.read_csv(path)
     if "cell_id" not in frame.columns:
-        raise ValueError("Sentinel evidence CSV missing cell_id")
+        raise ValueError(f"{label} CSV missing cell_id")
     return {
         str(row["cell_id"]): {
             key: _optional(value)
@@ -67,6 +71,7 @@ def _sentinel_by_cell(path: Path | None) -> dict[str, dict]:
 def build_evidence_packets(
     *,
     deep_scan_csv: str | Path = "data/output/deep_scan/deep_scan_top30.csv",
+    first_scan_csv: str | Path | None = "data/output/first_scan/ghsl_top_candidates.csv",
     sentinel_csv: str | Path | None = "data/output/sentinel_confirm/sentinel_top30_change.csv",
     output_dir: str | Path = "data/output/evidence_packets",
 ) -> EvidencePacketBuildResult:
@@ -96,12 +101,24 @@ def build_evidence_packets(
             "Deep-scan CSV missing columns: " + ", ".join(missing)
         )
 
+    first_scan_path = (
+        Path(first_scan_csv)
+        if first_scan_csv is not None
+        else None
+    )
     sentinel_path = (
         Path(sentinel_csv)
         if sentinel_csv is not None
         else None
     )
-    sentinel = _sentinel_by_cell(sentinel_path)
+    first_scan = _table_by_cell(
+        first_scan_path,
+        label="First-scan",
+    )
+    sentinel = _table_by_cell(
+        sentinel_path,
+        label="Sentinel evidence",
+    )
 
     output_dir = Path(output_dir)
     packet_dir = output_dir / "cells"
@@ -113,6 +130,7 @@ def build_evidence_packets(
     for row in deep.to_dict(orient="records"):
         cell_id = str(row["cell_id"])
         reasons = _reason_set(row.get("reasons"))
+        first_scan_row = first_scan.get(cell_id, {})
         sentinel_row = sentinel.get(cell_id)
 
         layer_known = {
@@ -156,12 +174,28 @@ def build_evidence_packets(
                 "urban_rank": int(row["urban_rank"]),
             },
             "urban_history": {
-                "acceleration_pp_per_year": _optional(
-                    row.get("acceleration_pp_per_year")
+                "built_2010_m2": _optional(
+                    first_scan_row.get("built_2010_m2")
+                ),
+                "built_2015_m2": _optional(
+                    first_scan_row.get("built_2015_m2")
+                ),
+                "built_2020_m2": _optional(
+                    first_scan_row.get("built_2020_m2")
+                ),
+                "cagr_2010_2015_pct": _optional(
+                    first_scan_row.get("cagr_2010_2015_pct")
                 ),
                 "cagr_2015_2020_pct": _optional(
                     row.get("cagr_2015_2020_pct")
                 ),
+                "acceleration_pp_per_year": _optional(
+                    row.get("acceleration_pp_per_year")
+                ),
+                "occupied_share_acceleration_pp": _optional(
+                    first_scan_row.get("occupied_share_acceleration_pp")
+                ),
+                "signal": _optional(first_scan_row.get("signal")),
             },
             "terrain": {
                 "p90_slope_deg": _optional(row.get("p90_slope_deg")),
