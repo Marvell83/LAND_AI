@@ -78,6 +78,7 @@ def build_evidence_packets(
     landslide_csv: str | Path | None = "data/output/landslide_scan/landslide_top30.csv",
     price_csv: str | Path | None = "data/output/price_scan/price_top30.csv",
     planning_csv: str | Path | None = "data/output/planning_scan/planning_top30.csv",
+    kgm_highway_csv: str | Path | None = "data/output/kgm_highway_scan/kgm_highway_top30.csv",
     output_dir: str | Path = "data/output/evidence_packets",
 ) -> EvidencePacketBuildResult:
     deep_path = Path(deep_scan_csv)
@@ -141,6 +142,11 @@ def build_evidence_packets(
         if planning_csv is not None
         else None
     )
+    kgm_highway_path = (
+        Path(kgm_highway_csv)
+        if kgm_highway_csv is not None
+        else None
+    )
     first_scan = _table_by_cell(
         first_scan_path,
         label="First-scan",
@@ -169,6 +175,10 @@ def build_evidence_packets(
         planning_path,
         label="Planning evidence",
     )
+    kgm_highway = _table_by_cell(
+        kgm_highway_path,
+        label="KGM highway evidence",
+    )
 
     output_dir = Path(output_dir)
     packet_dir = output_dir / "cells"
@@ -187,6 +197,7 @@ def build_evidence_packets(
         landslide_row = landslide.get(cell_id)
         price_row = price.get(cell_id)
         planning_row = planning.get(cell_id)
+        kgm_highway_row = kgm_highway.get(cell_id)
 
         protected_checked = bool(
             protected_row
@@ -358,6 +369,59 @@ def build_evidence_packets(
                     row.get("catalyst_stage_max")
                 ),
                 "known": layer_known["catalyst"],
+                "kgm_highway": {
+                    "status_checked": bool(
+                        kgm_highway_row
+                        and kgm_highway_row.get("status_checked")
+                        in (True, 1, "True", "true")
+                    ),
+                    "geometry_registry_checked": bool(
+                        kgm_highway_row
+                        and kgm_highway_row.get("geometry_registry_checked")
+                        in (True, 1, "True", "true")
+                    ),
+                    "spatial_known": bool(
+                        kgm_highway_row
+                        and kgm_highway_row.get("spatial_known")
+                        in (True, 1, "True", "true")
+                    ),
+                    "linked_project_count": (
+                        _optional(kgm_highway_row.get("linked_project_count"))
+                        if kgm_highway_row
+                        else None
+                    ),
+                    "nearest_project_id": (
+                        _optional(kgm_highway_row.get("nearest_project_id"))
+                        if kgm_highway_row
+                        else None
+                    ),
+                    "nearest_project_name": (
+                        _optional(kgm_highway_row.get("nearest_project_name"))
+                        if kgm_highway_row
+                        else None
+                    ),
+                    "nearest_project_stage": (
+                        _optional(kgm_highway_row.get("nearest_project_stage"))
+                        if kgm_highway_row
+                        else None
+                    ),
+                    "nearest_project_distance_km": (
+                        _optional(
+                            kgm_highway_row.get("nearest_project_distance_km")
+                        )
+                        if kgm_highway_row
+                        else None
+                    ),
+                    "nearest_influence_code": (
+                        _optional(kgm_highway_row.get("nearest_influence_code"))
+                        if kgm_highway_row
+                        else None
+                    ),
+                    "note": (
+                        "KGM project status and route geometry are separate. "
+                        "spatial_known requires a matching geometry-registry entry."
+                    ),
+                },
             },
             "sentinel_recent_change": sentinel_row,
             "planning_legal": {
