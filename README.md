@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.9
+## v0.10
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -58,6 +58,11 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - Copernicus DEM cached batch terrain scan
 - şeffaf Candidate Funnel: geniş GHSL havuzu → finalist → DEM/risk/katalizör
 - PASS / PASS_WITH_GAPS / DROP gerekçeli eleme
+- güvenli GHSL ZIP installer + CRS/dtype/epoch doğrulaması
+- GHSL çoklu-tile güvenli toplama
+- Data Readiness Checker
+- ilk gerçek 500 → 100 GHSL scan exporter (CSV + GeoJSON + JSON özet)
+- Windows GHSL kurulum ve ilk tarama başlatıcıları
 - Windows tek-tık başlatıcı ve güvenli secrets örneği
 - kanıt/evidence veri modeli
 - point-in-time backtest güvenlik altyapısı
@@ -104,12 +109,13 @@ pytest -q
 12. Hazard Registry + overlap/hard-veto engine ✅
 13. Cached DEM batch terrain scan ✅
 14. Transparent Candidate Funnel ✅
-15. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-16. KGM stratejik karayolu proje akışı
-17. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
-18. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-19. Backtest ve ağırlık kalibrasyonu
-20. 100 → 30 → 10 → parsel elemesi
+15. GHSL installer + readiness + first real 500→100 scan workflow ✅
+16. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+17. KGM stratejik karayolu proje akışı
+18. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
+19. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+20. Backtest ve ağırlık kalibrasyonu
+21. 100 → 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -120,6 +126,39 @@ Ek spatial kural:
 **Katalizör statüsü ile katalizör geometrisi aynı şey değildir.** Örneğin OSB statüsü OSBÜK'ten, sınır/geometri OSM'den geliyorsa iki kaynak ve iki güven seviyesi ayrı tutulur.
 
 Bu yazılım yatırım tavsiyesi vermez; araştırma adaylarını ve bunların lehine/aleyhine kanıtları düzenler.
+
+## İlk gerçek tarama
+
+Resmî GHSL 2010 / 2015 / 2020 R2023A 100 m ZIP dosyalarını indirdikten sonra Windows'ta:
+
+```
+GHSL_ZIP_KUR.bat "C:\\...\\official-ghsl.zip"
+```
+
+Tüm zorunlu epoch'lar hazır olduğunda:
+
+```
+ILK_GERCEK_TARAMA.bat
+```
+
+Python karşılıkları:
+
+```bash
+python scripts/check_readiness.py
+python scripts/first_real_scan.py --cell-km 5 --pool 500 --top 100
+```
+
+İlk scan çıktıları:
+
+```
+data/output/first_scan/ghsl_top_candidates.csv
+data/output/first_scan/ghsl_top_candidates.geojson
+data/output/first_scan/ghsl_scan_summary.json
+```
+
+Bu liste yalnız tarihsel GHSL built-up ivme shortlist'idir; yatırım sıralaması değildir.
+
+Detay: [docs/FIRST_REAL_SCAN.md](docs/FIRST_REAL_SCAN.md)
 
 ## Veri kurulumu
 
