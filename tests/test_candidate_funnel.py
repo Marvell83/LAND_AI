@@ -82,3 +82,4 @@ def test_unknown_terrain_does_not_fake_low_risk():
     )
     assert result[0].status == "PASS_WITH_GAPS"
     assert "terrain_unknown" in result[0].reasons
+    assert "hazard_unknown" in result[0].reasons
