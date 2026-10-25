@@ -18,7 +18,7 @@ SOURCES = (
     DataSource("Copernicus DEM GLO-90", "terrain", "Elevation, slope and cached batch terrain scan", "batch_engine_ready"),
     DataSource("OpenStreetMap / Overpass", "access", "Road/access context plus industrial and rail geometry evidence", "spatial_geometry_ready"),
     DataSource("OSBÜK OSB listesi", "catalyst", "Current OSB status feed and stage mapping", "status_feed_ready"),
-    DataSource("KGM official data", "catalyst", "Road infrastructure evidence", "planned"),
+    DataSource("KGM Otoyol Projeleri", "catalyst", "Official highway project lifecycle status plus registry-linked spatial influence", "status_feed_ready"),
     DataSource("AYGM / UAB railway projects", "catalyst", "Official railway project status groups", "status_feed_ready"),
     DataSource("Tarım ve Orman KorunanAlanlarWFS", "planning", "Official protected-area geometry and legal-review context", "direct_service_ready"),
     DataSource("e-Plan official evidence registry", "planning", "Point-in-time plan lifecycle, finalized UIP/NIP verification and Top-30 planning scan", "registry_engine_ready"),
