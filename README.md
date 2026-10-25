@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.11
+## v0.12
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -63,6 +63,8 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - Data Readiness Checker
 - ilk gerçek 500 → 100 GHSL scan exporter (CSV + GeoJSON + JSON özet)
 - transparent 100 → 30 deep scan (DEM + hazard + catalyst geometry)
+- Top-30 için cached Sentinel-2 seasonal confirmation
+- NDVI/NDBI/BSI/SCL değişimini ham kanıt olarak birleştiren `top30_with_sentinel.csv`
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
 - Windows tek-tık başlatıcı ve güvenli secrets örneği
@@ -113,12 +115,13 @@ pytest -q
 14. Transparent Candidate Funnel ✅
 15. GHSL installer + readiness + first real 500→100 scan workflow ✅
 16. Transparent 100→30 deep scan workflow ✅
-17. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-18. KGM stratejik karayolu proje akışı
-19. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
-20. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-21. Backtest ve ağırlık kalibrasyonu
-22. 30 → 10 → parsel elemesi
+17. Sentinel Top-30 recent-change confirmation ✅
+18. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+19. KGM stratejik karayolu proje akışı
+20. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
+21. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+22. Backtest ve ağırlık kalibrasyonu
+23. Evidence Packet + 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -178,6 +181,22 @@ python scripts/deep_scan.py --top 30
 Bu aşama mevcut DEM, hazard ve catalyst geometry kanıtlarını ekler; eksik katmanları gizlemek yerine veri açığı olarak gösterir.
 
 Detay: [docs/DEEP_SCAN_100_30.md](docs/DEEP_SCAN_100_30.md)
+
+Top-30 için Sentinel iki-dönem fiziksel değişim teyidi:
+
+```
+SENTINEL_TOP30.bat
+```
+
+veya:
+
+```bash
+python scripts/sentinel_confirm.py
+```
+
+Çıktı ham NDVI/NDBI/BSI/SCL değişimidir; otomatik yapılaşma etiketi değildir.
+
+Detay: [docs/SENTINEL_TOP30.md](docs/SENTINEL_TOP30.md)
 
 ## Veri kurulumu
 
