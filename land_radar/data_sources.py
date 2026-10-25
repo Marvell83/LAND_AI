@@ -14,9 +14,9 @@ class DataSource:
 
 SOURCES = (
     DataSource("GHSL", "urban", "Historical built-up / settlement change", "planned"),
-    DataSource("Copernicus Data Space / Sentinel-2", "satellite", "Recent land-surface change confirmation", "planned"),
+    DataSource("Copernicus Data Space / Sentinel-2 STAC", "satellite", "Recent scene discovery and cloud-screened availability", "probe_integrated"),
     DataSource("Copernicus DEM", "terrain", "Elevation and slope", "planned"),
-    DataSource("OpenStreetMap", "access", "Road and accessibility context", "planned"),
+    DataSource("OpenStreetMap / Overpass", "access", "Road and accessibility context", "probe_integrated"),
     DataSource("OSB official data", "catalyst", "Industrial zones and expansion evidence", "planned"),
     DataSource("KGM official data", "catalyst", "Road infrastructure evidence", "planned"),
     DataSource("TCDD / UAB official data", "catalyst", "Rail and transport evidence", "planned"),
