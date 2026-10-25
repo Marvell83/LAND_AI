@@ -24,6 +24,18 @@ data/raw/ghsl/
 
 LAND RADAR discovers the epoch from filenames containing `_E2010_`, `_E2015_`, or `_E2020_`.
 
+GHSL can be distributed by tiles. LAND RADAR v0.9 opens **all matching tiles for an epoch** and combines only the tiles intersecting the requested research cell. Do not delete neighbouring tiles simply because one matching file already exists.
+
+### Data readiness check
+
+From the repository root:
+
+```bash
+python scripts/check_readiness.py
+```
+
+The same readiness report is visible in the first Streamlit tab.
+
 ### Important interpretation rule
 
 GHS-BUILT-S R2023A time slices are a harmonized multi-temporal product and include spatial-temporal interpolation/extrapolation. They are used as a **structural historical baseline**, not treated as literal annual observations. Recent physical change must be confirmed with Sentinel imagery.
@@ -44,7 +56,12 @@ LAND RADAR searches the collection:
 sentinel-2-l2a
 ```
 
-The probe currently measures scene availability and cloud cover only. It does not yet convert Sentinel pixels into a development score.
+LAND RADAR has two Sentinel layers:
+
+1. STAC discovery: scene availability and cloud-cover metadata.
+2. Process API surface comparison: two-period NDVI, NDBI, BSI and SCL class-share changes.
+
+These spectral changes remain separate observations. The engine does **not** assume that NDBI increase alone proves construction.
 
 ## 3. Copernicus DEM
 
@@ -84,10 +101,29 @@ The current access probe queries OpenStreetMap through Overpass.
 
 It is intentionally a **single-cell research probe**, not a bulk nationwide scraper. Bulk road-network processing will later use cached/local extracts to avoid abusing public Overpass infrastructure.
 
-## 5. Price data
+## 5. Risk / hazard data
 
-No reliable price provider is integrated yet.
+Official risk data is currently accepted through the Hazard Registry GeoJSON schema.
+
+See:
+
+```
+docs/RISK_DATA.md
+```
+
+LAND RADAR keeps missing hazard data as **UNKNOWN**, not LOW.
+
+## 6. Price data
+
+The repository includes a manual/institutional comparable-price engine and optional CPI adjustment, but no verified automatic transaction-price feed.
 
 Therefore:
 
-**LAND RADAR must not calculate Mispricing for a real location until the price-data layer is resolved.**
+**LAND RADAR must not calculate a calibrated real-location Mispricing Score until the automatic price-data layer and backtests are resolved.**
+
+See:
+
+```
+docs/PRICE_MODEL.md
+```
+
