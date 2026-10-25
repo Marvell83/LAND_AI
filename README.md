@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.14
+## v0.15
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -70,6 +70,9 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - USBS resmî taşkın risk katmanı doğrudan GeoJSON entegrasyonu
 - Top-30 Official Constraints Scan
 - protected-area + flood alt-kanıtlarının Evidence Packet entegrasyonu
+- Top-30 hücre-bazlı emsal fiyat taraması
+- MEDIUM/HIGH güven eşiğiyle `price_known`
+- fiyat alt-kanıtının Evidence Packet entegrasyonu
 - evidence coverage yalnız veri kapsamı olarak hesaplanır; yatırım puanı değildir
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
@@ -124,13 +127,14 @@ pytest -q
 17. Sentinel Top-30 recent-change confirmation ✅
 18. Candidate Evidence Packets ✅
 19. Tarım ve Orman protected-area + USBS flood direct services ✅
-20. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-21. KGM stratejik karayolu proje akışı
-22. e-Plan / active-zoning güvenilir kanıt adaptörü
-23. AFAD/TUCBS heyelan ve diğer resmî risk servisleri
-24. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-25. Backtest ve ağırlık kalibrasyonu
-26. Evidence-based 30 → 10 → parsel elemesi
+20. Top-30 comparable-price evidence scan ✅
+21. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+22. KGM stratejik karayolu proje akışı
+23. e-Plan / active-zoning güvenilir kanıt adaptörü
+24. AFAD/TUCBS heyelan ve diğer resmî risk servisleri
+25. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+26. Backtest ve ağırlık kalibrasyonu
+27. Evidence-based 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -244,6 +248,28 @@ python scripts/build_evidence_packets.py
 Korunan alan eşleşmesi otomatik hard-veto değildir; e-Plan ayrı kanıt kanalı olarak hâlâ eksiktir.
 
 Detay: [docs/OFFICIAL_CONSTRAINTS.md](docs/OFFICIAL_CONSTRAINTS.md)
+
+Top-30 için hücre-bazlı emsal fiyat kanıtı:
+
+```bash
+bash PRICE_TOP30.sh data/processed/comparables.csv
+```
+
+veya:
+
+```bash
+python scripts/candidate_price_scan.py --comparables data/processed/comparables.csv
+```
+
+Fiyat katmanı yalnız MEDIUM/HIGH emsal güveninde `known=true` olur.
+
+Ardından Evidence Packet'leri yeniden üret:
+
+```bash
+python scripts/build_evidence_packets.py
+```
+
+Detay: [docs/TOP30_PRICE.md](docs/TOP30_PRICE.md)
 
 ## Veri kurulumu
 
