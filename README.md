@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.10
+## v0.11
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -62,7 +62,9 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - GHSL çoklu-tile güvenli toplama
 - Data Readiness Checker
 - ilk gerçek 500 → 100 GHSL scan exporter (CSV + GeoJSON + JSON özet)
-- Windows GHSL kurulum ve ilk tarama başlatıcıları
+- transparent 100 → 30 deep scan (DEM + hazard + catalyst geometry)
+- eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
+- Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
 - Windows tek-tık başlatıcı ve güvenli secrets örneği
 - kanıt/evidence veri modeli
 - point-in-time backtest güvenlik altyapısı
@@ -110,12 +112,13 @@ pytest -q
 13. Cached DEM batch terrain scan ✅
 14. Transparent Candidate Funnel ✅
 15. GHSL installer + readiness + first real 500→100 scan workflow ✅
-16. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-17. KGM stratejik karayolu proje akışı
-18. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
-19. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-20. Backtest ve ağırlık kalibrasyonu
-21. 100 → 30 → 10 → parsel elemesi
+16. Transparent 100→30 deep scan workflow ✅
+17. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+18. KGM stratejik karayolu proje akışı
+19. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
+20. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+21. Backtest ve ağırlık kalibrasyonu
+22. 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -159,6 +162,22 @@ data/output/first_scan/ghsl_scan_summary.json
 Bu liste yalnız tarihsel GHSL built-up ivme shortlist'idir; yatırım sıralaması değildir.
 
 Detay: [docs/FIRST_REAL_SCAN.md](docs/FIRST_REAL_SCAN.md)
+
+İlk 100 aday çıktıktan sonra:
+
+```
+DERIN_TARAMA_100_30.bat
+```
+
+veya:
+
+```bash
+python scripts/deep_scan.py --top 30
+```
+
+Bu aşama mevcut DEM, hazard ve catalyst geometry kanıtlarını ekler; eksik katmanları gizlemek yerine veri açığı olarak gösterir.
+
+Detay: [docs/DEEP_SCAN_100_30.md](docs/DEEP_SCAN_100_30.md)
 
 ## Veri kurulumu
 
