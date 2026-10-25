@@ -13,6 +13,7 @@ from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sen
 from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.scoring import score_cell
+from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 
 
 st.set_page_config(page_title="LAND RADAR", page_icon="🛰️", layout="wide")
@@ -250,6 +251,50 @@ with tab2:
                         hide_index=True,
                     )
         except GHSLProviderError as exc:
+            st.error(str(exc))
+
+    st.markdown("##### Kontrollü GHSL grid taraması")
+    scan_limit = st.select_slider(
+        "Taranacak ilk hücre sayısı",
+        options=[25, 50, 100, 250, 500],
+        value=50,
+        key="ghsl_scan_limit",
+    )
+    st.caption(
+        "Bu tarama yalnız GHSL built-up ivmesini sıralar. "
+        "Fiyat, risk veya katalizör içermediği için yatırım sıralaması değildir."
+    )
+    if st.button("GHSL grid taramasını çalıştır", use_container_width=True):
+        try:
+            scan_records = scan_grid_ghsl(
+                probe_cells,
+                ghsl_dir_text,
+                limit=scan_limit,
+            )
+            ranked = rank_accelerating(scan_records)
+            st.success(f"{len(scan_records)} hücre tarandı.")
+            st.dataframe(
+                [
+                    {
+                        "rank": i + 1,
+                        "cell_id": r.cell_id,
+                        "lat": r.center_lat,
+                        "lon": r.center_lon,
+                        "built_2010_m2": r.built_2010_m2,
+                        "built_2015_m2": r.built_2015_m2,
+                        "built_2020_m2": r.built_2020_m2,
+                        "cagr_10_15_pct": r.cagr_2010_2015_pct,
+                        "cagr_15_20_pct": r.cagr_2015_2020_pct,
+                        "acceleration_pp_year": r.acceleration_pp_per_year,
+                        "occupied_accel_pp": r.occupied_share_acceleration_pp,
+                        "signal": r.signal,
+                    }
+                    for i, r in enumerate(ranked[:30])
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+        except (GHSLProviderError, ValueError) as exc:
             st.error(str(exc))
 
 with tab3:
