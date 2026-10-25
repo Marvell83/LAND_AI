@@ -1,5 +1,6 @@
 streamlit>=1.39,<2
 requests>=2.31,<3
+beautifulsoup4>=4.12,<5
 numpy>=1.26,<3
 rasterio>=1.4,<2
 pytest>=8,<9
