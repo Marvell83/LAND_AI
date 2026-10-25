@@ -75,6 +75,7 @@ def build_evidence_packets(
     sentinel_csv: str | Path | None = "data/output/sentinel_confirm/sentinel_top30_change.csv",
     protected_csv: str | Path | None = "data/output/official_constraints/protected_area_top30.csv",
     flood_csv: str | Path | None = "data/output/official_constraints/flood_risk_top30.csv",
+    price_csv: str | Path | None = "data/output/price_scan/price_top30.csv",
     output_dir: str | Path = "data/output/evidence_packets",
 ) -> EvidencePacketBuildResult:
     deep_path = Path(deep_scan_csv)
@@ -123,6 +124,11 @@ def build_evidence_packets(
         if flood_csv is not None
         else None
     )
+    price_path = (
+        Path(price_csv)
+        if price_csv is not None
+        else None
+    )
     first_scan = _table_by_cell(
         first_scan_path,
         label="First-scan",
@@ -139,6 +145,10 @@ def build_evidence_packets(
         flood_path,
         label="Flood evidence",
     )
+    price = _table_by_cell(
+        price_path,
+        label="Price evidence",
+    )
 
     output_dir = Path(output_dir)
     packet_dir = output_dir / "cells"
@@ -154,6 +164,7 @@ def build_evidence_packets(
         sentinel_row = sentinel.get(cell_id)
         protected_row = protected.get(cell_id)
         flood_row = flood.get(cell_id)
+        price_row = price.get(cell_id)
 
         protected_checked = bool(
             protected_row
@@ -162,6 +173,14 @@ def build_evidence_packets(
         flood_checked = bool(
             flood_row
             and flood_row.get("checked") in (True, 1, "True", "true")
+        )
+        price_checked = bool(
+            price_row
+            and price_row.get("checked") in (True, 1, "True", "true")
+        )
+        price_known = bool(
+            price_row
+            and price_row.get("known") in (True, 1, "True", "true")
         )
 
         layer_known = {
@@ -182,7 +201,7 @@ def build_evidence_packets(
             # remains a separate requirement, so planning/legal is still
             # incomplete until both are checked.
             "planning_legal": False,
-            "price": False,
+            "price": price_known,
         }
 
         known_count = sum(layer_known.values())
@@ -322,10 +341,56 @@ def build_evidence_packets(
                 ),
             },
             "price": {
-                "known": False,
+                "checked": price_checked,
+                "known": price_known,
+                "price_basis": (
+                    _optional(price_row.get("price_basis"))
+                    if price_row
+                    else None
+                ),
+                "used_rows": (
+                    _optional(price_row.get("used_rows"))
+                    if price_row
+                    else None
+                ),
+                "median_price_per_m2": (
+                    _optional(price_row.get("median_price_per_m2"))
+                    if price_row
+                    else None
+                ),
+                "p25_price_per_m2": (
+                    _optional(price_row.get("p25_price_per_m2"))
+                    if price_row
+                    else None
+                ),
+                "p75_price_per_m2": (
+                    _optional(price_row.get("p75_price_per_m2"))
+                    if price_row
+                    else None
+                ),
+                "dispersion_ratio": (
+                    _optional(price_row.get("dispersion_ratio"))
+                    if price_row
+                    else None
+                ),
+                "median_age_days": (
+                    _optional(price_row.get("median_age_days"))
+                    if price_row
+                    else None
+                ),
+                "confidence_label": (
+                    _optional(price_row.get("confidence_label"))
+                    if price_row
+                    else None
+                ),
+                "reason": (
+                    _optional(price_row.get("reason"))
+                    if price_row
+                    else "No cell-specific comparable dataset attached."
+                ),
                 "note": (
-                    "No cell-specific verified comparable dataset has been "
-                    "attached to this candidate."
+                    "Price known requires MEDIUM/HIGH comparable-data confidence. "
+                    "This remains a local market reference, not a parcel valuation."
                 ),
             },
             "evidence_coverage": {
@@ -366,7 +431,8 @@ def build_evidence_packets(
                 "protected_area_checked": protected_checked,
                 "flood_checked": flood_checked,
                 "planning_known": False,
-                "price_known": False,
+                "price_checked": price_checked,
+                "price_known": price_known,
                 "evidence_coverage_pct": coverage_pct,
                 "missing_layers": ", ".join(missing_layers),
             }
