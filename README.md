@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.19
+## v0.20
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -89,6 +89,10 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - Top-30 KGM highway spatial scan
 - KGM status + Geometry Registry ayrımı
 - KGM highway Evidence Packet ve deep-scan entegrasyonu
+- strict raw GeoJSON/KML → Geometry Registry importer
+- official_vector / digitized_official_map / schematic_route güven politikası
+- kaynak URL + catalyst_id + gözlem tarihi zorunlu geometry provenance
+- Spatial Intelligence içinde ham geometri import ekranı
 - evidence coverage yalnız veri kapsamı olarak hesaplanır; yatırım puanı değildir
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
@@ -148,13 +152,14 @@ pytest -q
 22. Planning Intelligence / e-Plan evidence registry ✅
 23. MTA/TUCBS landslide inventory adapter ✅
 24. KGM highway project status + spatial registry engine ✅
-25. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-26. KGM / resmî future-route vector geometry servisleri doğrulanırsa direct geometry adapter
-27. e-Plan public interface için stabil otomatik vektör/veri adaptörü bulunursa doğrudan entegrasyon
-28. AFAD erişilebilir duyarlılık / diğer resmî risk servisleri
-29. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-30. Backtest ve ağırlık kalibrasyonu
-31. Gate sonrası evidence-based Top-10 review → parsel elemesi
+25. Strict GeoJSON/KML Geometry Evidence Importer ✅
+26. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+27. KGM / resmî future-route vector geometry servisleri doğrulanırsa direct geometry adapter
+28. e-Plan public interface için stabil otomatik vektör/veri adaptörü bulunursa doğrudan entegrasyon
+29. AFAD erişilebilir duyarlılık / diğer resmî risk servisleri
+30. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+31. Backtest ve ağırlık kalibrasyonu
+32. Gate sonrası evidence-based Top-10 review → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -351,6 +356,22 @@ python scripts/kgm_highway_scan.py
 KGM proje statüsü resmî kanıttır; hücreye mesafe yalnız aynı `road:kgm:*` catalyst id ile doğrulanmış Geometry Registry güzergâhı varsa hesaplanır.
 
 Detay: [docs/KGM_HIGHWAY_INTELLIGENCE.md](docs/KGM_HIGHWAY_INTELLIGENCE.md)
+
+Doğrulanmış ham GeoJSON/KML güzergâhını Geometry Registry'ye almak için:
+
+```bash
+python scripts/import_geometry_evidence.py \
+  --input data/raw/route.kml \
+  --catalyst-id road:kgm:project-id \
+  --source "Official source" \
+  --source-url "https://..." \
+  --role official_vector_route \
+  --confidence 98
+```
+
+Şematik veya resmî haritadan elle sayısallaştırılmış güzergâhlar düşük güven sınıfında tutulur; resmî vektör gibi davranılmaz.
+
+Detay: [docs/GEOMETRY_EVIDENCE_IMPORT.md](docs/GEOMETRY_EVIDENCE_IMPORT.md)
 
 ## Veri kurulumu
 
