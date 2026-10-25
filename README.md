@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.6
+## v0.7
 
 Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
 
@@ -44,6 +44,10 @@ Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
 - AYGM/UAB resmî demiryolu proje durum akışı
 - pilot grid ve GHSL aday haritaları
 - GHSL batch sonuçlarını CSV dışa aktarma
+- robust emsal fiyat laboratuvarı (CSV)
+- isteğe bağlı CPI/TÜFE ile reel fiyat düzeltmesi
+- evidence-backed risk finding / explicit hard-veto modeli
+- Windows tek-tık başlatıcı ve güvenli secrets örneği
 - kanıt/evidence veri modeli
 - point-in-time backtest güvenlik altyapısı
 - hard-risk veto mantığı
@@ -78,12 +82,14 @@ pytest -q
 5. Sentinel piksel değişim motoru ✅
 6. Catalyst State Machine ✅
 7. OSBÜK + AYGM durum akışları ✅
-8. OSB/demiryolu güzergâh geometrisi ve hücre eşleştirme
-9. KGM stratejik karayolu proje akışı
-10. Hard-risk coğrafi katmanları
-11. Point-in-time fiyat verisi ve Mispricing
-12. Backtest ve ağırlık kalibrasyonu
-13. 100 → 30 → 10 → parsel elemesi
+8. Emsal fiyat + CPI/reel fiyat laboratuvarı ✅
+9. Evidence-backed risk modeli ✅
+10. OSB/demiryolu güzergâh geometrisi ve hücre eşleştirme
+11. KGM stratejik karayolu proje akışı
+12. Hard-risk resmî coğrafi katmanları
+13. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+14. Backtest ve ağırlık kalibrasyonu
+15. 100 → 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -94,4 +100,4 @@ Bu yazılım yatırım tavsiyesi vermez; araştırma adaylarını ve bunların l
 
 ## Veri kurulumu
 
-GHSL ve Copernicus veri kurulumu için [docs/DATA_SETUP.md](docs/DATA_SETUP.md) dosyasına bak.
+GHSL ve Copernicus veri kurulumu için [docs/DATA_SETUP.md](docs/DATA_SETUP.md) dosyasına; fiyat metodolojisi için [docs/PRICE_MODEL.md](docs/PRICE_MODEL.md) dosyasına bak.
