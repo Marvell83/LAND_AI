@@ -5,10 +5,12 @@ from pathlib import Path
 
 import streamlit as st
 
+from land_radar.config import resolve_cdse_credentials
 from land_radar.data_sources import SOURCES
 from land_radar.geometry import bbox_for_cell
 from land_radar.models import CellMetrics, HardRiskFlags, LandCell
 from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
+from land_radar.providers.copernicus_dem import CopernicusDEMError, CopernicusProcessClient
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
 from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
@@ -19,7 +21,7 @@ from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 st.set_page_config(page_title="LAND RADAR", page_icon="🛰️", layout="wide")
 
 st.title("LAND RADAR")
-st.caption("Geospatial Investment Intelligence · V0.3 multi-source research core")
+st.caption("Geospatial Investment Intelligence · V0.4 terrain + urban growth core")
 
 st.info(
     "Kaynak yoksa katalizör yoktur. Geçmiş veri yoksa ivme yoktur. "
@@ -176,6 +178,48 @@ with tab2:
                     hide_index=True,
                 )
             except (CopernicusSTACError, ValueError) as exc:
+                st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### Copernicus DEM GLO-90 · yükseklik ve eğim")
+    try:
+        secret_map = st.secrets.to_dict()
+    except Exception:
+        secret_map = {}
+    cdse_credentials = resolve_cdse_credentials(secret_map)
+
+    if cdse_credentials is None:
+        st.warning(
+            "DEM probe için CDSE OAuth bilgisi bulunamadı. "
+            "CDSE_CLIENT_ID ve CDSE_CLIENT_SECRET ortam değişkenlerini veya "
+            ".streamlit/secrets.toml dosyasını kullan."
+        )
+    else:
+        st.success(f"CDSE OAuth hazır · kaynak: {cdse_credentials.source}")
+        if st.button("Copernicus DEM probe çalıştır", use_container_width=True):
+            try:
+                dem_client = CopernicusProcessClient(
+                    cdse_credentials.client_id,
+                    cdse_credentials.client_secret,
+                )
+                terrain = dem_client.terrain_summary(
+                    bbox,
+                    dem_instance="COPERNICUS_90",
+                )
+                a, b, c = st.columns(3)
+                a.metric("Ortalama yükselti", f"{terrain.mean_elevation_m:.0f} m")
+                b.metric("Ortalama eğim", f"{terrain.mean_slope_deg:.2f}°")
+                c.metric("P90 eğim", f"{terrain.p90_slope_deg:.2f}°")
+                st.write(
+                    {
+                        "min_elevation_m": terrain.min_elevation_m,
+                        "max_elevation_m": terrain.max_elevation_m,
+                        "max_slope_deg": terrain.max_slope_deg,
+                        "valid_pixels": terrain.valid_pixels,
+                        "dem_instance": terrain.dem_instance,
+                    }
+                )
+            except CopernicusDEMError as exc:
                 st.error(str(exc))
 
     st.divider()
