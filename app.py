@@ -13,6 +13,7 @@ from land_radar.data_sources import SOURCES
 from land_radar.geometry import bbox_for_cell
 from land_radar.models import CellMetrics, HardRiskFlags, LandCell
 from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
+from land_radar.pricing import PriceDataError, comparable_gap, expected_csv_columns, prepare_price_data, summarize_comparables
 from land_radar.providers.copernicus_dem import CopernicusDEMError, CopernicusProcessClient
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
 from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
@@ -34,8 +35,8 @@ st.info(
     "Fiyat verisi yoksa mispricing yoktur. Kanıt yoksa AI yorum yapmaz."
 )
 
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["Pilot Grid", "Live Data Probe", "Research Lab", "Data Sources"]
+tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    ["Pilot Grid", "Live Data Probe", "Price Lab", "Research Lab", "Data Sources"]
 )
 
 with tab1:
@@ -474,6 +475,155 @@ with tab2:
             st.error(str(exc))
 
 with tab3:
+    st.subheader("Emsal Fiyat Laboratuvarı")
+    st.caption(
+        "Bu ekran emsal veri dağılımını analiz eder. Sonuç 'gerçek değer' veya "
+        "'yatırım tavsiyesi' değildir; emsal medyanına göre fiyat farkını gösterir."
+    )
+
+    template_df = pd.DataFrame(
+        [
+            {
+                "observed_date": "2026-10-01",
+                "price_tl": 1500000,
+                "area_m2": 2000,
+                "source_type": "asking",
+                "lat": 40.0000,
+                "lon": 29.0000,
+                "land_type": "tarla",
+                "province": "Balıkesir",
+                "district": "Örnek",
+                "neighborhood": "Örnek",
+                "listing_id": "sample-1",
+            }
+        ],
+        columns=list(expected_csv_columns()),
+    )
+    st.download_button(
+        "Emsal CSV şablonunu indir",
+        data=template_df.to_csv(index=False).encode("utf-8-sig"),
+        file_name="land_radar_price_template.csv",
+        mime="text/csv",
+    )
+
+    uploaded = st.file_uploader(
+        "Emsal CSV yükle",
+        type=["csv"],
+        key="price_csv",
+    )
+
+    p1, p2, p3 = st.columns(3)
+    as_of = p1.date_input("Analiz tarihi", value=date.today(), key="price_as_of")
+    max_age = p2.number_input(
+        "Azami emsal yaşı (gün)",
+        min_value=30,
+        max_value=3650,
+        value=730,
+        step=30,
+    )
+    land_type_filter = p3.text_input(
+        "Arazi türü filtresi (opsiyonel)",
+        value="",
+        placeholder="tarla / arsa",
+    )
+
+    geo_filter = st.checkbox("Konu parsele göre mesafe filtresi kullan")
+    subject_lat = subject_lon = max_distance = None
+    if geo_filter:
+        g1, g2, g3 = st.columns(3)
+        subject_lat = g1.number_input(
+            "Konu enlem",
+            min_value=-90.0,
+            max_value=90.0,
+            value=40.0000,
+            format="%.6f",
+        )
+        subject_lon = g2.number_input(
+            "Konu boylam",
+            min_value=-180.0,
+            max_value=180.0,
+            value=29.0000,
+            format="%.6f",
+        )
+        max_distance = g3.number_input(
+            "Azami mesafe (km)",
+            min_value=0.1,
+            max_value=100.0,
+            value=10.0,
+            step=0.5,
+        )
+
+    if uploaded is not None:
+        try:
+            price_df = pd.read_csv(uploaded, sep=None, engine="python")
+            prepared, input_rows = prepare_price_data(
+                price_df,
+                as_of_date=as_of,
+                max_age_days=int(max_age),
+                subject_lat=subject_lat,
+                subject_lon=subject_lon,
+                max_distance_km=max_distance,
+                land_type=land_type_filter.strip() or None,
+            )
+            summary = summarize_comparables(
+                prepared,
+                input_rows=input_rows,
+            )
+
+            a, b, c, d = st.columns(4)
+            a.metric("Ham satır", summary.input_rows)
+            b.metric("Kullanılan emsal", summary.used_rows)
+            c.metric("Medyan TL/m²", f"{summary.median_price_per_m2:,.0f}")
+            d.metric("Veri güven etiketi", summary.confidence_label)
+
+            st.write(
+                {
+                    "p25_tl_m2": summary.p25_price_per_m2,
+                    "p75_tl_m2": summary.p75_price_per_m2,
+                    "iqr_tl_m2": summary.iqr_price_per_m2,
+                    "dispersion_ratio": summary.dispersion_ratio,
+                    "median_age_days": summary.median_age_days,
+                    "source_mix": dict(summary.source_mix),
+                }
+            )
+            st.dataframe(
+                prepared,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.markdown("#### Konu taşınmazın emsal medyanına göre farkı")
+            q1, q2 = st.columns(2)
+            subject_price = q1.number_input(
+                "Konu toplam fiyatı (TL)",
+                min_value=1.0,
+                value=1000000.0,
+                step=50000.0,
+            )
+            subject_area = q2.number_input(
+                "Konu alanı (m²)",
+                min_value=1.0,
+                value=1000.0,
+                step=50.0,
+            )
+            gap = comparable_gap(
+                subject_price_tl=float(subject_price),
+                subject_area_m2=float(subject_area),
+                comparable_median_price_per_m2=summary.median_price_per_m2,
+            )
+            x, y, z = st.columns(3)
+            x.metric("Konu TL/m²", f"{gap.subject_price_per_m2:,.0f}")
+            y.metric("Emsal medyan TL/m²", f"{gap.comparable_median_price_per_m2:,.0f}")
+            z.metric("Emsal medyan farkı", f"%{gap.gap_pct:+.1f}")
+            st.caption(
+                "Pozitif fark, konu fiyatının emsal medyanının altında olduğunu gösterir. "
+                "Bu değer otomatik olarak Mispricing Score'a yazılmaz."
+            )
+        except (PriceDataError, ValueError, pd.errors.ParserError) as exc:
+            st.error(str(exc))
+
+
+with tab4:
     st.subheader("Araştırma laboratuvarı")
     st.caption(
         "Buradaki girişler manuel senaryo testidir; gerçek bölge verisi değildir. "
@@ -550,7 +700,7 @@ with tab3:
             "yatırım modeli olarak kabul edilmez."
         )
 
-with tab4:
+with tab5:
     st.subheader("Veri kaynağı kayıt defteri")
     st.dataframe(
         [
