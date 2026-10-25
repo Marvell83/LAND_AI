@@ -332,3 +332,58 @@ def test_official_flood_and_landslide_can_complete_core_hazard(tmp_path: Path):
     assert packet["hazard"]["official_landslide_inventory"]["checked"] is True
     assert packet["hazard"]["core_hazard_coverage"]["known"] is True
     assert "hazard" not in packet["evidence_coverage"]["missing_layers"]
+
+
+def test_evidence_packet_includes_kgm_highway_sublayer(tmp_path: Path):
+    deep = tmp_path / "deep.csv"
+    pd.DataFrame(
+        [{
+            "cell_id": "A",
+            "center_lat": 40.0,
+            "center_lon": 29.0,
+            "urban_rank": 1,
+            "acceleration_pp_per_year": 5.0,
+            "cagr_2015_2020_pct": 12.0,
+            "p90_slope_deg": 5.0,
+            "nearest_catalyst_km": 3.5,
+            "catalyst_stage_max": 4,
+            "hard_veto": False,
+            "max_hazard_severity": 1,
+            "status": "PASS",
+            "reasons": "",
+        }]
+    ).to_csv(deep, index=False)
+
+    highway = tmp_path / "kgm.csv"
+    pd.DataFrame(
+        [{
+            "cell_id": "A",
+            "status_checked": True,
+            "geometry_registry_checked": True,
+            "kgm_geometry_count": 1,
+            "linked_project_count": 1,
+            "spatial_known": True,
+            "nearest_project_id": "road:kgm:test",
+            "nearest_project_name": "Test Otoyolu",
+            "nearest_project_stage": 4,
+            "nearest_project_distance_km": 3.5,
+            "nearest_influence_code": "NEAR",
+            "nearest_influence_label": "Yakın",
+            "nearest_evidence_complete": True,
+        }]
+    ).to_csv(highway, index=False)
+
+    result = build_evidence_packets(
+        deep_scan_csv=deep,
+        kgm_highway_csv=highway,
+        output_dir=tmp_path / "out",
+    )
+    payload = json.loads(
+        Path(result.output_master_json).read_text(encoding="utf-8")
+    )
+    road = payload["candidates"][0]["catalyst"]["kgm_highway"]
+
+    assert road["status_checked"] is True
+    assert road["spatial_known"] is True
+    assert road["nearest_project_id"] == "road:kgm:test"
+    assert road["nearest_project_stage"] == 4
