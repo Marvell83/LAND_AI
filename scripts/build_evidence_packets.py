@@ -35,6 +35,10 @@ def parser() -> argparse.ArgumentParser:
         default="data/output/official_constraints/flood_risk_top30.csv",
     )
     p.add_argument(
+        "--landslide",
+        default="data/output/landslide_scan/landslide_top30.csv",
+    )
+    p.add_argument(
         "--price",
         default="data/output/price_scan/price_top30.csv",
     )
@@ -54,11 +58,13 @@ def main() -> int:
     sentinel = Path(args.sentinel)
     protected = Path(args.protected)
     flood = Path(args.flood)
+    landslide = Path(args.landslide)
     price = Path(args.price)
     planning = Path(args.planning)
     sentinel_arg = sentinel if sentinel.exists() else None
     protected_arg = protected if protected.exists() else None
     flood_arg = flood if flood.exists() else None
+    landslide_arg = landslide if landslide.exists() else None
     price_arg = price if price.exists() else None
     planning_arg = planning if planning.exists() else None
 
@@ -68,6 +74,7 @@ def main() -> int:
             sentinel_csv=sentinel_arg,
             protected_csv=protected_arg,
             flood_csv=flood_arg,
+            landslide_csv=landslide_arg,
             price_csv=price_arg,
             planning_csv=planning_arg,
             output_dir=args.output_dir,
