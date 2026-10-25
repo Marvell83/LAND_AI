@@ -25,6 +25,8 @@ from land_radar.providers.osbuk import OSBUKProviderError, fetch_osb_list, filte
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.providers.osm_geometry import OSMGeometryProviderError, best_name_matches, fetch_industrial_geometries, fetch_rail_geometries, to_geometry_evidence
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
+from land_radar.providers.arcgis_geojson import ArcGISGeoJSONError
+from land_radar.providers.tarimorman_official import fetch_flood_hazards, fetch_protected_constraints
 from land_radar.readiness import check_data_readiness
 from land_radar.scoring import score_cell
 from land_radar.spatial.batch import batch_link_catalysts
@@ -34,6 +36,7 @@ from land_radar.spatial.geometry import geometry_from_geojson
 from land_radar.spatial.hazard_overlap import batch_link_hazards, summarize_cell_hazards
 from land_radar.spatial.hazard_registry import hazards_from_feature_collection
 from land_radar.spatial.influence import classify_influence
+from land_radar.spatial.planning_overlap import batch_link_constraints, summarize_cell_planning
 from land_radar.spatial.registry import registry_from_feature_collection, registry_to_feature_collection
 from land_radar.terrain_scan import scan_terrain
 from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
@@ -527,6 +530,91 @@ with tab2:
                 use_container_width=True,
             )
         except (GHSLProviderError, ValueError) as exc:
+            st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### Resmî korunan alan + USBS taşkın probe")
+    st.caption(
+        "Tarım ve Orman Bakanlığı açık ArcGIS REST servislerini doğrudan sorgular. "
+        "Korunan alan kesişimi otomatik hard-veto değildir; hukukî inceleme işaretidir."
+    )
+    if st.button("Resmî kısıt ve taşkın probe çalıştır", use_container_width=True):
+        official_bbox = bbox_for_cell(selected, padding_km=20.0)
+        try:
+            protected_constraints = fetch_protected_constraints(official_bbox)
+            protected_links = batch_link_constraints(
+                [selected],
+                protected_constraints,
+                max_distance_km=20.0,
+            )
+            planning_summary = summarize_cell_planning(
+                selected.cell_id,
+                protected_links,
+                checked=True,
+            )
+
+            flood_hazards = fetch_flood_hazards(official_bbox)
+            flood_links = batch_link_hazards(
+                [selected],
+                flood_hazards,
+                max_distance_km=20.0,
+            )
+            flood_summary = summarize_cell_hazards(
+                selected.cell_id,
+                flood_links,
+            )
+
+            a, b, c1, d = st.columns(4)
+            a.metric("Korunan alan bulgusu", planning_summary.finding_count)
+            b.metric("Hücreyle kesişen", planning_summary.intersecting_count)
+            c1.metric(
+                "Hukukî inceleme",
+                "EVET" if planning_summary.legal_review_required else "Hayır",
+            )
+            d.metric("Taşkın risk bulgusu", flood_summary.finding_count)
+
+            if protected_links:
+                st.markdown("##### Korunan alan bağlantıları")
+                st.dataframe(
+                    [
+                        {
+                            "category": link.category,
+                            "distance_km": link.distance_km,
+                            "intersects": link.intersects_cell,
+                            "overlap_ratio": link.overlap_ratio,
+                            "legal_effect": int(link.legal_effect),
+                            "source": link.source,
+                        }
+                        for link in protected_links
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            if flood_links:
+                st.markdown("##### USBS taşkın bağlantıları")
+                st.dataframe(
+                    [
+                        {
+                            "hazard_id": link.hazard_id,
+                            "distance_km": link.distance_km,
+                            "intersects": link.intersects_cell,
+                            "overlap_ratio": link.overlap_ratio,
+                            "severity": int(link.severity),
+                            "source": link.source,
+                        }
+                        for link in flood_links
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+            if not protected_links and not flood_links:
+                st.success(
+                    "20 km bağlamında bu iki resmî servis üzerinden bir bulgu dönmedi. "
+                    "Bu sonuç e-Plan, AFAD/heyelan veya diğer hukukî katmanların temiz olduğu anlamına gelmez."
+                )
+        except (ArcGISGeoJSONError, ValueError) as exc:
             st.error(str(exc))
 
 with tab3:
