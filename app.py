@@ -14,6 +14,7 @@ from land_radar.providers.copernicus_dem import CopernicusDEMError, CopernicusPr
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
 from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
+from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
 from land_radar.scoring import score_cell
 from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 
@@ -21,7 +22,7 @@ from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 st.set_page_config(page_title="LAND RADAR", page_icon="🛰️", layout="wide")
 
 st.title("LAND RADAR")
-st.caption("Geospatial Investment Intelligence · V0.4 terrain + urban growth core")
+st.caption("Geospatial Investment Intelligence · V0.5 terrain + spectral change core")
 
 st.info(
     "Kaynak yoksa katalizör yoktur. Geçmiş veri yoksa ivme yoktur. "
@@ -220,6 +221,118 @@ with tab2:
                     }
                 )
             except CopernicusDEMError as exc:
+                st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### Sentinel-2 iki dönem yüzey değişimi")
+    st.caption(
+        "Aynı mevsime yakın iki zaman penceresini karşılaştır. "
+        "NDVI/NDBI/BSI ve SCL sınıf payları ayrı gösterilir; sonuç doğrudan 'yapılaşma' sayılmaz."
+    )
+    default_second_end = date.today()
+    default_second_start = default_second_end - timedelta(days=60)
+    default_first_end = default_second_end - timedelta(days=365)
+    default_first_start = default_second_start - timedelta(days=365)
+
+    p1a, p1b, p2a, p2b = st.columns(4)
+    first_start = p1a.date_input(
+        "1. dönem başlangıç",
+        value=default_first_start,
+        key="surface_first_start",
+    )
+    first_end = p1b.date_input(
+        "1. dönem bitiş",
+        value=default_first_end,
+        key="surface_first_end",
+    )
+    second_start = p2a.date_input(
+        "2. dönem başlangıç",
+        value=default_second_start,
+        key="surface_second_start",
+    )
+    second_end = p2b.date_input(
+        "2. dönem bitiş",
+        value=default_second_end,
+        key="surface_second_end",
+    )
+    surface_cloud = st.slider(
+        "Yüzey değişimi için azami tile bulut oranı (%)",
+        0,
+        100,
+        30,
+        key="surface_cloud",
+    )
+
+    if st.button("Sentinel yüzey değişimini hesapla", use_container_width=True):
+        if cdse_credentials is None:
+            st.warning("Sentinel Process API için CDSE OAuth bilgisi gerekli.")
+        else:
+            try:
+                surface_client = SentinelSurfaceClient(
+                    cdse_credentials.client_id,
+                    cdse_credentials.client_secret,
+                )
+                first_surface = surface_client.summary(
+                    bbox,
+                    first_start,
+                    first_end,
+                    max_cloud_coverage=surface_cloud,
+                )
+                second_surface = surface_client.summary(
+                    bbox,
+                    second_start,
+                    second_end,
+                    max_cloud_coverage=surface_cloud,
+                )
+                surface_change = compare_surface(first_surface, second_surface)
+
+                st.dataframe(
+                    [
+                        {
+                            "period": "1",
+                            "start": first_surface.start_date,
+                            "end": first_surface.end_date,
+                            "median_ndvi": first_surface.median_ndvi,
+                            "median_ndbi": first_surface.median_ndbi,
+                            "median_bsi": first_surface.median_bsi,
+                            "vegetation_share": first_surface.vegetation_share,
+                            "bare_soil_share": first_surface.bare_soil_share,
+                            "water_share": first_surface.water_share,
+                            "valid_land_pixels": first_surface.valid_land_pixels,
+                        },
+                        {
+                            "period": "2",
+                            "start": second_surface.start_date,
+                            "end": second_surface.end_date,
+                            "median_ndvi": second_surface.median_ndvi,
+                            "median_ndbi": second_surface.median_ndbi,
+                            "median_bsi": second_surface.median_bsi,
+                            "vegetation_share": second_surface.vegetation_share,
+                            "bare_soil_share": second_surface.bare_soil_share,
+                            "water_share": second_surface.water_share,
+                            "valid_land_pixels": second_surface.valid_land_pixels,
+                        },
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+
+                st.markdown("##### Ham değişim")
+                st.write(
+                    {
+                        "delta_ndvi": surface_change.delta_ndvi,
+                        "delta_ndbi": surface_change.delta_ndbi,
+                        "delta_bsi": surface_change.delta_bsi,
+                        "delta_vegetation_share_pp": surface_change.delta_vegetation_share_pp,
+                        "delta_bare_soil_share_pp": surface_change.delta_bare_soil_share_pp,
+                        "delta_water_share_pp": surface_change.delta_water_share_pp,
+                    }
+                )
+                st.warning(
+                    "Bu çıktılar spektral/sınıfsal değişim kanıtıdır. "
+                    "Tek başına yeni yapılaşma veya yatırım fırsatı hükmü vermez."
+                )
+            except (SentinelSurfaceError, ValueError) as exc:
                 st.error(str(exc))
 
     st.divider()
