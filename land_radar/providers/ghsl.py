@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 import re
+from typing import Iterable
 
 import numpy as np
 import rasterio
@@ -53,6 +55,52 @@ def discover_epoch_file(directory: str | Path, epoch: int) -> Path | None:
     return matches[0] if matches else None
 
 
+def _summarize_dataset(
+    src,
+    source_path: str | Path,
+    bbox_wgs84: tuple[float, float, float, float],
+) -> BuiltUpSummary:
+    if src.crs is None:
+        raise GHSLProviderError("GHSL raster has no CRS metadata")
+
+    min_lon, min_lat, max_lon, max_lat = bbox_wgs84
+    if str(src.crs).upper() in {"EPSG:4326", "OGC:CRS84"}:
+        left, bottom, right, top = min_lon, min_lat, max_lon, max_lat
+    else:
+        left, bottom, right, top = transform_bounds(
+            "EPSG:4326",
+            src.crs,
+            min_lon,
+            min_lat,
+            max_lon,
+            max_lat,
+            densify_pts=21,
+        )
+
+    window = from_bounds(left, bottom, right, top, transform=src.transform)
+    data = src.read(1, window=window, masked=True, boundless=True)
+
+    if data.size == 0:
+        raise GHSLProviderError("Requested bbox returned no raster pixels")
+
+    compressed = data.compressed().astype("float64")
+    if compressed.size == 0:
+        raise GHSLProviderError("Requested bbox contains only NoData pixels")
+
+    total = float(np.sum(compressed))
+    mean = float(np.mean(compressed))
+    occupied_share = float(np.count_nonzero(compressed > 0) / compressed.size)
+
+    return BuiltUpSummary(
+        epoch=epoch_from_filename(source_path),
+        total_built_up_m2=round(total, 2),
+        mean_built_up_m2_per_pixel=round(mean, 4),
+        occupied_pixel_share=round(occupied_share, 6),
+        valid_pixels=int(compressed.size),
+        source_path=str(source_path),
+    )
+
+
 def summarize_built_up(
     raster_path: str | Path,
     bbox_wgs84: tuple[float, float, float, float],
@@ -68,49 +116,70 @@ def summarize_built_up(
 
     try:
         with rasterio.open(raster_path) as src:
-            if src.crs is None:
-                raise GHSLProviderError("GHSL raster has no CRS metadata")
-
-            min_lon, min_lat, max_lon, max_lat = bbox_wgs84
-            if str(src.crs).upper() in {"EPSG:4326", "OGC:CRS84"}:
-                left, bottom, right, top = min_lon, min_lat, max_lon, max_lat
-            else:
-                left, bottom, right, top = transform_bounds(
-                    "EPSG:4326",
-                    src.crs,
-                    min_lon,
-                    min_lat,
-                    max_lon,
-                    max_lat,
-                    densify_pts=21,
-                )
-
-            window = from_bounds(left, bottom, right, top, transform=src.transform)
-            data = src.read(1, window=window, masked=True, boundless=True)
-
-            if data.size == 0:
-                raise GHSLProviderError("Requested bbox returned no raster pixels")
-
-            compressed = data.compressed().astype("float64")
-            if compressed.size == 0:
-                raise GHSLProviderError("Requested bbox contains only NoData pixels")
-
-            total = float(np.sum(compressed))
-            mean = float(np.mean(compressed))
-            occupied_share = float(np.count_nonzero(compressed > 0) / compressed.size)
-
-            return BuiltUpSummary(
-                epoch=epoch_from_filename(raster_path),
-                total_built_up_m2=round(total, 2),
-                mean_built_up_m2_per_pixel=round(mean, 4),
-                occupied_pixel_share=round(occupied_share, 6),
-                valid_pixels=int(compressed.size),
-                source_path=str(raster_path),
-            )
+            return _summarize_dataset(src, raster_path, bbox_wgs84)
     except GHSLProviderError:
         raise
     except Exception as exc:
         raise GHSLProviderError(f"Failed to read GHSL raster: {exc}") from exc
+
+
+class GHSLRasterStack:
+    """Open multiple GHSL epochs once and reuse them across many grid cells."""
+
+    def __init__(self, directory: str | Path, epochs: Iterable[int] = (2010, 2015, 2020)):
+        self.directory = Path(directory)
+        self.epochs = tuple(int(epoch) for epoch in epochs)
+        self.paths: dict[int, Path] = {}
+        self.datasets: dict[int, object] = {}
+        self._stack: ExitStack | None = None
+
+        for epoch in self.epochs:
+            path = discover_epoch_file(self.directory, epoch)
+            if path is not None:
+                self.paths[epoch] = path
+
+    @property
+    def missing_epochs(self) -> tuple[int, ...]:
+        return tuple(epoch for epoch in self.epochs if epoch not in self.paths)
+
+    def __enter__(self) -> "GHSLRasterStack":
+        self._stack = ExitStack()
+        try:
+            for epoch, path in self.paths.items():
+                self.datasets[epoch] = self._stack.enter_context(rasterio.open(path))
+        except Exception:
+            self._stack.close()
+            self._stack = None
+            self.datasets.clear()
+            raise
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self._stack is not None:
+            self._stack.close()
+        self._stack = None
+        self.datasets.clear()
+
+    def summarize(
+        self,
+        epoch: int,
+        bbox_wgs84: tuple[float, float, float, float],
+    ) -> BuiltUpSummary:
+        if self._stack is None:
+            raise GHSLProviderError("GHSLRasterStack must be used as a context manager")
+        if epoch not in self.datasets:
+            raise GHSLProviderError(f"GHSL epoch {epoch} is not available")
+
+        try:
+            return _summarize_dataset(
+                self.datasets[epoch],
+                self.paths[epoch],
+                bbox_wgs84,
+            )
+        except GHSLProviderError:
+            raise
+        except Exception as exc:
+            raise GHSLProviderError(f"Failed to read GHSL epoch {epoch}: {exc}") from exc
 
 
 def compare_built_up(start: BuiltUpSummary, end: BuiltUpSummary) -> BuiltUpChange:
