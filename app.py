@@ -16,6 +16,8 @@ from land_radar.geometry import bbox_for_cell
 from land_radar.inflation import CPIIndex, InflationDataError, add_real_price_columns
 from land_radar.models import CellMetrics, HardRiskFlags, LandCell
 from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
+from land_radar.plan_import import PlanImportError, import_plan_csv
+from land_radar.planning_scan import run_planning_scan
 from land_radar.pricing import PriceDataError, comparable_gap, expected_csv_columns, prepare_price_data, summarize_comparables
 from land_radar.providers.copernicus_dem import CopernicusDEMError, CopernicusProcessClient
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
@@ -52,12 +54,13 @@ st.info(
     "Fiyat verisi yoksa mispricing yoktur. Kanıt yoksa AI yorum yapmaz."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs(
     [
         "Pilot Grid",
         "Live Data Probe",
         "Spatial Intelligence",
         "Price Lab",
+        "Planning Intelligence",
         "Risk & Funnel",
         "Research Lab",
         "Data Sources",
@@ -1223,6 +1226,170 @@ with tab4:
 
 
 with tab5:
+    st.subheader("Planning Intelligence")
+    st.caption(
+        "Bölgesel ÇDP/WMS kapsamı tek başına imar hakkı değildir. "
+        "planning_legal ancak tarih-kesitinde geçerli, FINALIZED ve mekânsal olarak "
+        "doğrulanmış UIP/NIP plan kanıtıyla known olur."
+    )
+
+    st.markdown(
+        "[Resmî e-Plan](https://e-plan.gov.tr/) · "
+        "[Askıdaki Planlar](https://e-plan.gov.tr/e-plan/html/acikPlanlar.html?filter=aski) · "
+        "[İmar Durumu](https://e-plan.gov.tr/e-plan/html/imarDurumu.html)"
+    )
+
+    plan_template = pd.DataFrame(
+        [
+            {
+                "plan_id": "UIP-123456789",
+                "title": "Örnek Kesinleşmiş Uygulama İmar Planı",
+                "plan_type": "UİP",
+                "stage": "kesinleşmiş",
+                "source": "e-Plan",
+                "source_url": "https://e-plan.gov.tr/",
+                "scale_denominator": 1000,
+                "published_date": date.today().isoformat(),
+                "decision_date": "",
+                "effective_date": "",
+                "suspension_start": "",
+                "suspension_end": "",
+                "observed_date": date.today().isoformat(),
+                "geometry_verified": False,
+                "cell_id": "",
+                "province": "",
+                "district": "",
+                "neighborhood": "",
+                "min_lon": "",
+                "min_lat": "",
+                "max_lon": "",
+                "max_lat": "",
+                "decision_no": "",
+                "pin": "",
+                "confidence": 95,
+                "note": "Resmî kaynaktan doğrulayın.",
+            }
+        ]
+    )
+    st.download_button(
+        "Plan Evidence CSV şablonunu indir",
+        data=plan_template.to_csv(index=False).encode("utf-8-sig"),
+        file_name="land_radar_plan_evidence_template.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    plan_upload = st.file_uploader(
+        "Resmî plan kanıt CSV yükle",
+        type=["csv"],
+        key="plan_evidence_csv",
+    )
+
+    if plan_upload is not None:
+        st.dataframe(
+            pd.read_csv(plan_upload),
+            use_container_width=True,
+            hide_index=True,
+        )
+        plan_upload.seek(0)
+        if st.button(
+            "Plan CSV'yi registry'ye doğrula ve kaydet",
+            use_container_width=True,
+            key="save_plan_registry",
+        ):
+            try:
+                processed_dir = Path("data/processed")
+                processed_dir.mkdir(parents=True, exist_ok=True)
+                upload_path = processed_dir / "plans_uploaded.csv"
+                upload_path.write_bytes(plan_upload.getvalue())
+                plans = import_plan_csv(
+                    upload_path,
+                    processed_dir / "plan_registry.json",
+                )
+                st.success(
+                    f"{len(plans)} plan kaydı doğrulandı ve plan_registry.json oluşturuldu."
+                )
+                st.dataframe(
+                    pd.DataFrame(
+                        [
+                            {
+                                "plan_id": p.plan_id,
+                                "type": p.plan_type,
+                                "stage": p.stage.name,
+                                "scale": p.scale_denominator,
+                                "published_date": p.published_date,
+                                "geometry_verified": p.geometry_verified,
+                                "source": p.source,
+                            }
+                            for p in plans
+                        ]
+                    ),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+            except (PlanImportError, ValueError, FileNotFoundError) as exc:
+                st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### Top-30 Planning Scan")
+    planning_as_of = st.date_input(
+        "Planning analiz tarihi",
+        value=date.today(),
+        key="planning_as_of",
+    )
+    deep_scan_path = Path("data/output/deep_scan/deep_scan_top30.csv")
+    registry_path = Path("data/processed/plan_registry.json")
+
+    if not deep_scan_path.exists():
+        st.info(
+            "Top-30 dosyası henüz yok. Önce Risk & Funnel / deep scan aşamasını çalıştır."
+        )
+    else:
+        st.caption(
+            f"Plan registry: {'hazır' if registry_path.exists() else 'yok — yalnız WMS bağlamı taranacak'}"
+        )
+        if st.button(
+            "Top-30 Planning Scan çalıştır",
+            use_container_width=True,
+            key="run_planning_scan",
+        ):
+            try:
+                result = run_planning_scan(
+                    candidate_csv=deep_scan_path,
+                    plan_registry_path=(registry_path if registry_path.exists() else None),
+                    output_dir="data/output/planning_scan",
+                    as_of_date=planning_as_of,
+                )
+                p1, p2, p3, p4 = st.columns(4)
+                p1.metric("Aday", result.candidate_count)
+                p2.metric("ÇDP WMS kapsamı", result.wms_covered_count)
+                p3.metric("Registry eşleşmesi", result.registry_match_count)
+                p4.metric("Planning known", result.planning_known_count)
+
+                planning_df = pd.read_csv(result.output_csv)
+                st.dataframe(
+                    planning_df,
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                st.download_button(
+                    "Planning Top-30 CSV indir",
+                    data=planning_df.to_csv(index=False).encode("utf-8-sig"),
+                    file_name="planning_top30.csv",
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+
+                if result.planning_known_count == 0:
+                    st.warning(
+                        "Henüz hiçbir aday FINALIZED + spatially verified UIP/NIP kuralını karşılamıyor. "
+                        "ÇDP WMS kapsamı tek başına planning_known yapmaz."
+                    )
+            except (ValueError, FileNotFoundError) as exc:
+                st.error(str(exc))
+
+
+with tab6:
     st.subheader("Risk & Candidate Funnel")
     st.caption(
         "Bu ekran sihirli Opportunity Score üretmez. GHSL ivmesiyle ilk adayları seçer, "
@@ -1541,7 +1708,7 @@ with tab5:
             st.error(str(exc))
 
 
-with tab6:
+with tab7:
     st.subheader("Araştırma laboratuvarı")
     st.caption(
         "Buradaki girişler manuel senaryo testidir; gerçek bölge verisi değildir. "
@@ -1618,7 +1785,7 @@ with tab6:
             "yatırım modeli olarak kabul edilmez."
         )
 
-with tab7:
+with tab8:
     st.subheader("Veri kaynağı kayıt defteri")
     st.dataframe(
         [
