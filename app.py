@@ -25,6 +25,7 @@ from land_radar.providers.osbuk import OSBUKProviderError, fetch_osb_list, filte
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.providers.osm_geometry import OSMGeometryProviderError, best_name_matches, fetch_industrial_geometries, fetch_rail_geometries, to_geometry_evidence
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
+from land_radar.readiness import check_data_readiness
 from land_radar.scoring import score_cell
 from land_radar.spatial.batch import batch_link_catalysts
 from land_radar.spatial.catalyst_geometry import link_catalyst_to_cell
@@ -63,6 +64,39 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
 with tab1:
     st.subheader("Sakarya → Çanakkale pilot koridoru")
     st.write(SAKARYA_CANAKKALE.note)
+
+    with st.expander("Data Readiness", expanded=True):
+        try:
+            readiness_secret_map = st.secrets.to_dict()
+        except Exception:
+            readiness_secret_map = {}
+        readiness_credentials = resolve_cdse_credentials(readiness_secret_map)
+        readiness = check_data_readiness(
+            cdse_credentials_available=readiness_credentials is not None,
+        )
+        readiness_df = pd.DataFrame(
+            [
+                {
+                    "key": item.key,
+                    "status": item.status,
+                    "required": item.required,
+                    "detail": item.detail,
+                }
+                for item in readiness.items
+            ]
+        )
+        st.dataframe(
+            readiness_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+        if readiness.required_ready:
+            st.success("Zorunlu GHSL çekirdeği hazır.")
+        else:
+            st.warning(
+                "Gerçek GHSL taraması için zorunlu epoch dosyaları eksik. "
+                "Eksik veri LOW olarak yorumlanmaz."
+            )
     cell_km = st.select_slider(
         "Hücre boyutu (km)",
         options=[1.0, 2.0, 5.0, 10.0],
