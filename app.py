@@ -6,6 +6,7 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from land_radar import __version__
 from land_radar.catalyst import STAGE_LABELS
 from land_radar.config import resolve_cdse_credentials
 from land_radar.data_sources import SOURCES
@@ -26,7 +27,7 @@ from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 st.set_page_config(page_title="LAND RADAR", page_icon="🛰️", layout="wide")
 
 st.title("LAND RADAR")
-st.caption("Geospatial Investment Intelligence · V0.5 terrain + spectral change core")
+st.caption(f"Geospatial Investment Intelligence · v{__version__}")
 
 st.info(
     "Kaynak yoksa katalizör yoktur. Geçmiş veri yoksa ivme yoktur. "
