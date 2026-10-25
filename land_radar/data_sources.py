@@ -22,7 +22,7 @@ SOURCES = (
     DataSource("AYGM / UAB railway projects", "catalyst", "Official railway project status groups", "status_feed_ready"),
     DataSource("Municipal / e-Plan sources", "planning", "Planning decisions and maturity", "planned"),
     DataSource("AFAD / MTA / official hazard data", "risk", "Flood, landslide, geology and hazards", "planned"),
-    DataSource("Market / comparable price dataset", "price", "Relative price and mispricing", "unresolved"),
+    DataSource("User / institutional comparable dataset", "price", "Robust comparable price distribution and gap", "manual_engine_ready"),
 )
 
 
