@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
+from pathlib import Path
 
 import streamlit as st
 
@@ -9,6 +10,7 @@ from land_radar.geometry import bbox_for_cell
 from land_radar.models import CellMetrics, HardRiskFlags, LandCell
 from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
+from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.scoring import score_cell
 
@@ -16,7 +18,7 @@ from land_radar.scoring import score_cell
 st.set_page_config(page_title="LAND RADAR", page_icon="🛰️", layout="wide")
 
 st.title("LAND RADAR")
-st.caption("Geospatial Investment Intelligence · V0.2 data-probe core")
+st.caption("Geospatial Investment Intelligence · V0.3 multi-source research core")
 
 st.info(
     "Kaynak yoksa katalizör yoktur. Geçmiş veri yoksa ivme yoktur. "
@@ -174,6 +176,81 @@ with tab2:
                 )
             except (CopernicusSTACError, ValueError) as exc:
                 st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### GHSL GHS-BUILT-S · yerel raster analizi")
+    st.caption(
+        "GHSL R2023A dönemleri yapısal tarihsel baz sağlar. "
+        "Resmî ürün dönemleri interpolasyon/ekstrapolasyon içerdiği için "
+        "bunları doğrudan yıllık gözlem gibi yorumlamıyoruz; güncel değişimi Sentinel ile teyit ediyoruz."
+    )
+    ghsl_dir_text = st.text_input(
+        "GHSL GeoTIFF klasörü",
+        value="data/raw/ghsl",
+        help="İndirilip ZIP'ten çıkarılmış resmî GHS-BUILT-S GeoTIFF dosyalarının bulunduğu klasör.",
+    )
+    ghsl_epochs = [2010, 2015, 2020]
+    if st.button("Seçili hücre için GHSL dönemlerini analiz et", use_container_width=True):
+        ghsl_dir = Path(ghsl_dir_text)
+        summaries = []
+        missing_epochs = []
+        try:
+            for epoch in ghsl_epochs:
+                path = discover_epoch_file(ghsl_dir, epoch)
+                if path is None:
+                    missing_epochs.append(epoch)
+                    continue
+                summaries.append(summarize_built_up(path, bbox))
+
+            if not summaries:
+                st.warning(
+                    "Uyumlu GHSL GeoTIFF bulunamadı. 2010/2015/2020 epoch dosyalarını "
+                    "belirtilen klasöre çıkar."
+                )
+            else:
+                st.dataframe(
+                    [
+                        {
+                            "epoch": s.epoch,
+                            "total_built_up_m2": s.total_built_up_m2,
+                            "mean_m2_per_pixel": s.mean_built_up_m2_per_pixel,
+                            "occupied_pixel_share": s.occupied_pixel_share,
+                            "valid_pixels": s.valid_pixels,
+                            "source": s.source_path,
+                        }
+                        for s in summaries
+                    ],
+                    use_container_width=True,
+                    hide_index=True,
+                )
+                if missing_epochs:
+                    st.warning("Eksik GHSL dönemleri: " + ", ".join(map(str, missing_epochs)))
+
+                ordered = sorted(
+                    [s for s in summaries if s.epoch is not None],
+                    key=lambda s: s.epoch,
+                )
+                changes = [
+                    compare_built_up(ordered[i - 1], ordered[i])
+                    for i in range(1, len(ordered))
+                ]
+                if changes:
+                    st.markdown("##### Dönemsel built-up değişimi")
+                    st.dataframe(
+                        [
+                            {
+                                "period": f"{c.start_epoch}→{c.end_epoch}",
+                                "absolute_change_m2": c.absolute_change_m2,
+                                "percent_change": c.percent_change,
+                                "occupied_share_change_pp": c.occupied_share_change_pp,
+                            }
+                            for c in changes
+                        ],
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+        except GHSLProviderError as exc:
+            st.error(str(exc))
 
 with tab3:
     st.subheader("Araştırma laboratuvarı")
