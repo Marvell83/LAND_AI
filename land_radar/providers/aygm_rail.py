@@ -33,12 +33,26 @@ _GROUP_TO_STAGE = {
 }
 
 
+_TR_FOLD = str.maketrans({
+    "ı": "i", "İ": "I",
+    "ş": "s", "Ş": "S",
+    "ğ": "g", "Ğ": "G",
+    "ü": "u", "Ü": "U",
+    "ö": "o", "Ö": "O",
+    "ç": "c", "Ç": "C",
+})
+
+
 def normalize_project_name(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split())
 
 
+def _fold(value: str) -> str:
+    return normalize_project_name(value).translate(_TR_FOLD).casefold()
+
+
 def status_group_to_stage(group: str) -> CatalystStage:
-    normalized = normalize_project_name(group).casefold()
+    normalized = _fold(group)
     for key, stage in _GROUP_TO_STAGE.items():
         if key in normalized:
             return stage
@@ -46,7 +60,7 @@ def status_group_to_stage(group: str) -> CatalystStage:
 
 
 def _heading_group(text: str) -> str | None:
-    normalized = normalize_project_name(text).casefold()
+    normalized = _fold(text)
     if "devam eden projeler" in normalized:
         return "devam eden"
     if "tamamlanan projeler" in normalized:
@@ -77,12 +91,12 @@ def parse_aygm_rail_html(html: str) -> list[RailProjectRecord]:
             current_group = group
             continue
 
-        lower = text.casefold()
+        lower = _fold(text)
         if any(
             marker in lower
             for marker in (
-                "iletişim",
-                "organizasyon şeması",
+                "iletisim",
+                "organizasyon semasi",
                 "adres:",
             )
         ):
@@ -95,11 +109,11 @@ def parse_aygm_rail_html(html: str) -> list[RailProjectRecord]:
             # social and empty anchors.
             if len(text) < 8:
                 continue
-            if text.casefold() in {
+            if _fold(text) in {
                 "ana sayfa",
-                "tümünü gör",
+                "tumunu gor",
                 "detay",
-                "iletişim",
+                "iletisim",
             }:
                 continue
 
@@ -154,13 +168,13 @@ def filter_project_keywords(
     records: Iterable[RailProjectRecord],
     keywords: Iterable[str],
 ) -> list[RailProjectRecord]:
-    tokens = [token.casefold().strip() for token in keywords if token.strip()]
+    tokens = [_fold(token) for token in keywords if token.strip()]
     if not tokens:
         return list(records)
 
     result: list[RailProjectRecord] = []
     for record in records:
-        haystack = record.name.casefold()
+        haystack = _fold(record.name)
         if any(token in haystack for token in tokens):
             result.append(record)
     return result
