@@ -20,8 +20,10 @@ SOURCES = (
     DataSource("OSBÜK OSB listesi", "catalyst", "Current OSB status feed and stage mapping", "status_feed_ready"),
     DataSource("KGM official data", "catalyst", "Road infrastructure evidence", "planned"),
     DataSource("AYGM / UAB railway projects", "catalyst", "Official railway project status groups", "status_feed_ready"),
-    DataSource("Tarım ve Orman KorunanAlanlarWFS", "planning", "Official protected-area geometry and legal-review context", "direct_service_ready"),\n    DataSource("Municipal / e-Plan sources", "planning", "Active/suspended plans and zoning evidence", "planned"),
-    DataSource("Tarım ve Orman / USBS flood risk", "risk", "Official flood-risk polygon query", "direct_service_ready"),\n    DataSource("AFAD / TUCBS / other official hazard export", "risk", "GeoJSON hazard registry, overlap, distance and explicit hard-veto", "manual_registry_ready"),
+    DataSource("Tarım ve Orman KorunanAlanlarWFS", "planning", "Official protected-area geometry and legal-review context", "direct_service_ready"),
+    DataSource("Municipal / e-Plan sources", "planning", "Active/suspended plans and zoning evidence", "planned"),
+    DataSource("Tarım ve Orman / USBS flood risk", "risk", "Official flood-risk polygon query", "direct_service_ready"),
+    DataSource("AFAD / TUCBS / other official hazard export", "risk", "GeoJSON hazard registry, overlap, distance and explicit hard-veto", "manual_registry_ready"),
     DataSource("User / institutional comparable dataset", "price", "Robust comparable price distribution and gap", "manual_engine_ready"),
 )
 
