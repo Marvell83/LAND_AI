@@ -17,6 +17,7 @@ SOURCES = (
     DataSource("Copernicus Data Space / Sentinel-2 L2A", "satellite", "Scene discovery plus two-period spectral/SCL change", "spectral_engine_ready"),
     DataSource("Copernicus DEM GLO-90", "terrain", "Elevation, slope and cached batch terrain scan", "batch_engine_ready"),
     DataSource("OpenStreetMap / Overpass", "access", "Road/access context plus industrial and rail geometry evidence", "spatial_geometry_ready"),
+    DataSource("Verified GeoJSON/KML geometry evidence", "spatial", "Strict provenance-aware route/boundary import into Geometry Registry", "importer_ready"),
     DataSource("OSBÜK OSB listesi", "catalyst", "Current OSB status feed and stage mapping", "status_feed_ready"),
     DataSource("KGM Otoyol Projeleri", "catalyst", "Official highway project lifecycle status plus registry-linked spatial influence", "status_feed_ready"),
     DataSource("AYGM / UAB railway projects", "catalyst", "Official railway project status groups", "status_feed_ready"),
