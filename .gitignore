@@ -10,3 +10,5 @@ data/cache/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/cache/.gitkeep
+data/output/*
+!data/output/.gitkeep
