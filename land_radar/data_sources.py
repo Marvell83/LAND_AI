@@ -16,7 +16,7 @@ SOURCES = (
     DataSource("GHSL GHS-BUILT-S R2023A", "urban", "Historical built-up structural baseline", "local_engine_ready"),
     DataSource("Copernicus Data Space / Sentinel-2 L2A", "satellite", "Scene discovery plus two-period spectral/SCL change", "spectral_engine_ready"),
     DataSource("Copernicus DEM GLO-90", "terrain", "Elevation and slope", "oauth_adapter_ready"),
-    DataSource("OpenStreetMap / Overpass", "access", "Road and accessibility context", "probe_integrated"),
+    DataSource("OpenStreetMap / Overpass", "access", "Road/access context plus industrial and rail geometry evidence", "spatial_geometry_ready"),
     DataSource("OSBÜK OSB listesi", "catalyst", "Current OSB status feed and stage mapping", "status_feed_ready"),
     DataSource("KGM official data", "catalyst", "Road infrastructure evidence", "planned"),
     DataSource("AYGM / UAB railway projects", "catalyst", "Official railway project status groups", "status_feed_ready"),
