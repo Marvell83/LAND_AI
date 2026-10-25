@@ -17,6 +17,11 @@ from land_radar.providers.aygm_rail import (
     record_to_catalyst as rail_record_to_catalyst,
 )
 from land_radar.providers.copernicus_dem import CopernicusProcessClient
+from land_radar.providers.kgm_highway import (
+    KGMHighwayProviderError,
+    fetch_highway_projects,
+    record_to_catalyst as highway_record_to_catalyst,
+)
 from land_radar.providers.osbuk import (
     OSBUKProviderError,
     fetch_osb_list,
@@ -81,6 +86,13 @@ def _load_live_catalysts() -> tuple[dict[str, Catalyst], list[str]]:
             catalysts[catalyst.catalyst_id] = catalyst
     except AYGMRailProviderError as exc:
         notes.append(f"aygm_unavailable:{exc}")
+
+    try:
+        for record in fetch_highway_projects():
+            catalyst = highway_record_to_catalyst(record)
+            catalysts[catalyst.catalyst_id] = catalyst
+    except KGMHighwayProviderError as exc:
+        notes.append(f"kgm_highway_unavailable:{exc}")
 
     return catalysts, notes
 
