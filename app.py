@@ -11,6 +11,7 @@ from land_radar.catalyst import STAGE_LABELS
 from land_radar.config import resolve_cdse_credentials
 from land_radar.data_sources import SOURCES
 from land_radar.geometry import bbox_for_cell
+from land_radar.inflation import CPIIndex, InflationDataError, add_real_price_columns
 from land_radar.models import CellMetrics, HardRiskFlags, LandCell
 from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
 from land_radar.pricing import PriceDataError, comparable_gap, expected_csv_columns, prepare_price_data, summarize_comparables
@@ -512,6 +513,25 @@ with tab3:
         key="price_csv",
     )
 
+    cpi_template = pd.DataFrame(
+        [
+            {"date": "2025-07-01", "index": 100.0},
+            {"date": "2026-07-01", "index": 130.0},
+        ]
+    )
+    st.download_button(
+        "TÜFE/CPI CSV şablonunu indir",
+        data=cpi_template.to_csv(index=False).encode("utf-8-sig"),
+        file_name="land_radar_cpi_template.csv",
+        mime="text/csv",
+    )
+    cpi_uploaded = st.file_uploader(
+        "TÜFE/CPI CSV yükle (opsiyonel)",
+        type=["csv"],
+        key="cpi_csv",
+        help="date,index sütunları gerekir. Verilirse emsaller analiz tarihinin fiyat düzeyine taşınır.",
+    )
+
     p1, p2, p3 = st.columns(3)
     as_of = p1.date_input("Analiz tarihi", value=date.today(), key="price_as_of")
     max_age = p2.number_input(
@@ -556,15 +576,56 @@ with tab3:
     if uploaded is not None:
         try:
             price_df = pd.read_csv(uploaded, sep=None, engine="python")
-            prepared, input_rows = prepare_price_data(
-                price_df,
-                as_of_date=as_of,
-                max_age_days=int(max_age),
-                subject_lat=subject_lat,
-                subject_lon=subject_lon,
-                max_distance_km=max_distance,
-                land_type=land_type_filter.strip() or None,
-            )
+            price_basis = "nominal"
+
+            if cpi_uploaded is not None:
+                # Filter invalid/future/out-of-scope observations before CPI lookup,
+                # but postpone outlier trimming until all prices share one price level.
+                filtered, input_rows = prepare_price_data(
+                    price_df,
+                    as_of_date=as_of,
+                    max_age_days=int(max_age),
+                    subject_lat=subject_lat,
+                    subject_lon=subject_lon,
+                    max_distance_km=max_distance,
+                    land_type=land_type_filter.strip() or None,
+                    apply_outlier_filter=False,
+                )
+                cpi_df = pd.read_csv(cpi_uploaded, sep=None, engine="python")
+                cpi_index = CPIIndex.from_frame(cpi_df)
+                adjusted = add_real_price_columns(
+                    filtered,
+                    cpi_index,
+                    reference_date=as_of,
+                )
+                adjusted["nominal_price_tl"] = adjusted["price_tl"]
+                adjusted["nominal_price_per_m2"] = (
+                    adjusted["price_tl"] / adjusted["area_m2"]
+                )
+                adjusted["price_tl"] = adjusted["real_price_tl"]
+
+                prepared, _ = prepare_price_data(
+                    adjusted,
+                    as_of_date=as_of,
+                    max_age_days=int(max_age),
+                    subject_lat=subject_lat,
+                    subject_lon=subject_lon,
+                    max_distance_km=max_distance,
+                    land_type=land_type_filter.strip() or None,
+                    apply_outlier_filter=True,
+                )
+                price_basis = f"reel · {as_of.isoformat()} fiyat düzeyi"
+            else:
+                prepared, input_rows = prepare_price_data(
+                    price_df,
+                    as_of_date=as_of,
+                    max_age_days=int(max_age),
+                    subject_lat=subject_lat,
+                    subject_lon=subject_lon,
+                    max_distance_km=max_distance,
+                    land_type=land_type_filter.strip() or None,
+                )
+
             summary = summarize_comparables(
                 prepared,
                 input_rows=input_rows,
@@ -575,6 +636,7 @@ with tab3:
             b.metric("Kullanılan emsal", summary.used_rows)
             c.metric("Medyan TL/m²", f"{summary.median_price_per_m2:,.0f}")
             d.metric("Veri güven etiketi", summary.confidence_label)
+            st.caption(f"Fiyat bazı: {price_basis}")
 
             st.write(
                 {
@@ -619,7 +681,12 @@ with tab3:
                 "Pozitif fark, konu fiyatının emsal medyanının altında olduğunu gösterir. "
                 "Bu değer otomatik olarak Mispricing Score'a yazılmaz."
             )
-        except (PriceDataError, ValueError, pd.errors.ParserError) as exc:
+        except (
+            PriceDataError,
+            InflationDataError,
+            ValueError,
+            pd.errors.ParserError,
+        ) as exc:
             st.error(str(exc))
 
 
