@@ -9,6 +9,7 @@ from .spatial.geometry import geometry_from_geojson
 
 
 class HazardSeverity(IntEnum):
+    UNKNOWN = -1
     NONE = 0
     LOW = 1
     MEDIUM = 2
