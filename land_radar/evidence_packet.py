@@ -75,6 +75,7 @@ def build_evidence_packets(
     sentinel_csv: str | Path | None = "data/output/sentinel_confirm/sentinel_top30_change.csv",
     protected_csv: str | Path | None = "data/output/official_constraints/protected_area_top30.csv",
     flood_csv: str | Path | None = "data/output/official_constraints/flood_risk_top30.csv",
+    landslide_csv: str | Path | None = "data/output/landslide_scan/landslide_top30.csv",
     price_csv: str | Path | None = "data/output/price_scan/price_top30.csv",
     planning_csv: str | Path | None = "data/output/planning_scan/planning_top30.csv",
     output_dir: str | Path = "data/output/evidence_packets",
@@ -125,6 +126,11 @@ def build_evidence_packets(
         if flood_csv is not None
         else None
     )
+    landslide_path = (
+        Path(landslide_csv)
+        if landslide_csv is not None
+        else None
+    )
     price_path = (
         Path(price_csv)
         if price_csv is not None
@@ -151,6 +157,10 @@ def build_evidence_packets(
         flood_path,
         label="Flood evidence",
     )
+    landslide = _table_by_cell(
+        landslide_path,
+        label="Landslide evidence",
+    )
     price = _table_by_cell(
         price_path,
         label="Price evidence",
@@ -174,6 +184,7 @@ def build_evidence_packets(
         sentinel_row = sentinel.get(cell_id)
         protected_row = protected.get(cell_id)
         flood_row = flood.get(cell_id)
+        landslide_row = landslide.get(cell_id)
         price_row = price.get(cell_id)
         planning_row = planning.get(cell_id)
 
@@ -184,6 +195,10 @@ def build_evidence_packets(
         flood_checked = bool(
             flood_row
             and flood_row.get("checked") in (True, 1, "True", "true")
+        )
+        landslide_checked = bool(
+            landslide_row
+            and landslide_row.get("checked") in (True, 1, "True", "true")
         )
         price_checked = bool(
             price_row
@@ -202,6 +217,9 @@ def build_evidence_packets(
             and planning_row.get("planning_known") in (True, 1, "True", "true")
         )
 
+        base_hazard_known = "hazard_unknown" not in reasons
+        official_core_hazard_known = flood_checked and landslide_checked
+
         layer_known = {
             "urban_history": (
                 _optional(row.get("acceleration_pp_per_year")) is not None
@@ -210,7 +228,7 @@ def build_evidence_packets(
                 "terrain_unknown" not in reasons
                 and _optional(row.get("p90_slope_deg")) is not None
             ),
-            "hazard": "hazard_unknown" not in reasons,
+            "hazard": base_hazard_known or official_core_hazard_known,
             "catalyst": (
                 "catalyst_unknown" not in reasons
                 and _optional(row.get("nearest_catalyst_km")) is not None
@@ -298,10 +316,38 @@ def build_evidence_packets(
                         if flood_row
                         else None
                     ),
-                    "note": (
-                        "This sub-layer covers official USBS flood polygons only; "
-                        "it does not make the full hazard layer complete."
+                    "note": "Official USBS flood-risk polygon check.",
+                },
+                "official_landslide_inventory": {
+                    "checked": landslide_checked,
+                    "finding_count": (
+                        _optional(landslide_row.get("finding_count"))
+                        if landslide_row
+                        else None
                     ),
+                    "max_overlap_ratio": (
+                        _optional(landslide_row.get("max_overlap_ratio"))
+                        if landslide_row
+                        else None
+                    ),
+                    "nearest_hazard_km": (
+                        _optional(landslide_row.get("nearest_hazard_km"))
+                        if landslide_row
+                        else None
+                    ),
+                    "note": (
+                        "MTA/TUCBS landslide inventory check. Inventory is not "
+                        "the same as AFAD landslide susceptibility."
+                    ),
+                },
+                "core_hazard_coverage": {
+                    "known": official_core_hazard_known,
+                    "policy": (
+                        "Known when USBS flood and MTA landslide inventory have "
+                        "both been checked, or a separate verified hazard registry "
+                        "already covered the candidate."
+                    ),
+                    "afad_susceptibility": "restricted_or_not_configured",
                 },
             },
             "catalyst": {
