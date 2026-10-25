@@ -24,7 +24,7 @@ SOURCES = (
     DataSource("Municipal / e-Plan sources", "planning", "Active/suspended plans and zoning evidence", "planned"),
     DataSource("Tarım ve Orman / USBS flood risk", "risk", "Official flood-risk polygon query", "direct_service_ready"),
     DataSource("AFAD / TUCBS / other official hazard export", "risk", "GeoJSON hazard registry, overlap, distance and explicit hard-veto", "manual_registry_ready"),
-    DataSource("User / institutional comparable dataset", "price", "Robust comparable price distribution and gap", "manual_engine_ready"),
+    DataSource("User / institutional comparable dataset", "price", "Robust local comparable distribution plus Top-30 batch evidence", "candidate_batch_ready"),
 )
 
 
