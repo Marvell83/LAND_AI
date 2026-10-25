@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from land_radar import __version__
+from land_radar.candidate_funnel import CandidatePolicy, build_candidate_funnel, surviving_candidates
 from land_radar.catalyst import STAGE_LABELS
 from land_radar.config import resolve_cdse_credentials
 from land_radar.data_sources import SOURCES
@@ -29,8 +30,11 @@ from land_radar.spatial.batch import batch_link_catalysts
 from land_radar.spatial.catalyst_geometry import link_catalyst_to_cell
 from land_radar.spatial.distance import distance_from_cell_to_geometry
 from land_radar.spatial.geometry import geometry_from_geojson
+from land_radar.spatial.hazard_overlap import batch_link_hazards, summarize_cell_hazards
+from land_radar.spatial.hazard_registry import hazards_from_feature_collection
 from land_radar.spatial.influence import classify_influence
 from land_radar.spatial.registry import registry_from_feature_collection, registry_to_feature_collection
+from land_radar.terrain_scan import scan_terrain
 from land_radar.urban_scan import rank_accelerating, scan_grid_ghsl
 
 
@@ -44,12 +48,13 @@ st.info(
     "Fiyat verisi yoksa mispricing yoktur. Kanıt yoksa AI yorum yapmaz."
 )
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
     [
         "Pilot Grid",
         "Live Data Probe",
         "Spatial Intelligence",
         "Price Lab",
+        "Risk & Funnel",
         "Research Lab",
         "Data Sources",
     ]
@@ -71,7 +76,7 @@ with tab1:
     c3.metric("Durum", "Geometri hazır")
     st.warning(
         "Bu aşamada hücrelerde otomatik yatırım skoru yoktur. "
-        "V0.2 gerçek kaynaklara kontrollü probe yapar; toplu tarama henüz kapalıdır."
+        "Toplu tarama artık Risk & Funnel sekmesinde kontrollü olarak çalıştırılabilir."
     )
     pilot_rows = [
         {
@@ -1096,6 +1101,305 @@ with tab4:
 
 
 with tab5:
+    st.subheader("Risk & Candidate Funnel")
+    st.caption(
+        "Bu ekran sihirli Opportunity Score üretmez. GHSL ivmesiyle ilk adayları seçer, "
+        "DEM/eğim ve açık hard-veto riskleriyle eleme yapar; eksik veri varsa bunu GAP olarak gösterir."
+    )
+
+    rf1, rf2, rf3 = st.columns(3)
+    funnel_cell_km = rf1.select_slider(
+        "Funnel hücre boyutu (km)",
+        options=[2.0, 5.0, 10.0],
+        value=5.0,
+        key="funnel_cell_km",
+    )
+    funnel_limit = rf2.select_slider(
+        "İlk taranacak hücre",
+        options=[25, 50, 100],
+        value=25,
+        key="funnel_limit",
+    )
+    slope_limit = rf3.slider(
+        "P90 eğim üst sınırı (°)",
+        min_value=2.0,
+        max_value=30.0,
+        value=12.0,
+        step=0.5,
+        key="funnel_slope_limit",
+    )
+
+    funnel_ghsl_dir = st.text_input(
+        "Funnel GHSL GeoTIFF klasörü",
+        value="data/raw/ghsl",
+        key="funnel_ghsl_dir",
+    )
+
+    st.markdown("#### Opsiyonel resmî risk/hazard GeoJSON")
+    hazard_template = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [[
+                        [29.00, 40.00],
+                        [29.02, 40.00],
+                        [29.02, 40.02],
+                        [29.00, 40.02],
+                        [29.00, 40.00],
+                    ]],
+                },
+                "properties": {
+                    "hazard_id": "official:flood:example",
+                    "category": "flood",
+                    "severity": "HIGH",
+                    "source": "USBS / official export",
+                    "observed_date": date.today().isoformat(),
+                    "source_url": None,
+                    "hard_veto": False,
+                    "confidence": 95,
+                    "note": "Example only — replace with source-derived classification",
+                },
+            }
+        ],
+    }
+    st.download_button(
+        "Hazard Registry GeoJSON şablonunu indir",
+        data=json.dumps(
+            hazard_template,
+            ensure_ascii=False,
+            indent=2,
+        ).encode("utf-8"),
+        file_name="land_radar_hazard_registry_template.geojson",
+        mime="application/geo+json",
+    )
+    hazard_upload = st.file_uploader(
+        "Hazard Registry GeoJSON yükle (opsiyonel)",
+        type=["geojson", "json"],
+        key="hazard_registry_upload",
+    )
+
+    st.markdown("#### Opsiyonel katalizör Geometry Registry")
+    funnel_geometry_upload = st.file_uploader(
+        "Catalyst Geometry Registry GeoJSON yükle (opsiyonel)",
+        type=["geojson", "json"],
+        key="funnel_geometry_registry",
+    )
+
+    pf1, pf2 = st.columns(2)
+    require_catalyst = pf1.checkbox(
+        "Katalizör mesafesi zorunlu olsun",
+        value=False,
+        key="funnel_require_catalyst",
+    )
+    catalyst_distance_limit = pf2.slider(
+        "Azami katalizör mesafesi (km)",
+        min_value=1,
+        max_value=50,
+        value=20,
+        key="funnel_catalyst_distance",
+    )
+
+    try:
+        funnel_secret_map = st.secrets.to_dict()
+    except Exception:
+        funnel_secret_map = {}
+    funnel_cdse_credentials = resolve_cdse_credentials(funnel_secret_map)
+    use_dem = st.checkbox(
+        "Copernicus DEM batch taramasını dahil et",
+        value=funnel_cdse_credentials is not None,
+        disabled=funnel_cdse_credentials is None,
+        help=(
+            "CDSE OAuth yoksa terrain bilinmiyor olarak kalır; sistem bunu düşük risk saymaz."
+        ),
+    )
+    if funnel_cdse_credentials is None:
+        st.info(
+            "CDSE OAuth bulunmadı: funnel yine çalışabilir ama terrain_unknown olarak işaretlenir."
+        )
+
+    if st.button("Candidate Funnel çalıştır", use_container_width=True):
+        try:
+            funnel_cells = build_pilot_grid(funnel_cell_km)
+            selected_cells = funnel_cells[:funnel_limit]
+
+            urban_records = scan_grid_ghsl(
+                selected_cells,
+                funnel_ghsl_dir,
+                limit=funnel_limit,
+            )
+
+            terrain_records = []
+            if use_dem and funnel_cdse_credentials is not None:
+                dem_client = CopernicusProcessClient(
+                    funnel_cdse_credentials.client_id,
+                    funnel_cdse_credentials.client_secret,
+                )
+                terrain_records = scan_terrain(
+                    selected_cells,
+                    dem_client,
+                    limit=funnel_limit,
+                    cache_dir="data/cache/terrain",
+                    dem_instance="COPERNICUS_90",
+                )
+
+            hazard_summaries = []
+            hazard_links = []
+            if hazard_upload is not None:
+                hazard_payload = json.load(hazard_upload)
+                hazards = hazards_from_feature_collection(hazard_payload)
+                hazard_links = batch_link_hazards(
+                    selected_cells,
+                    hazards,
+                    max_distance_km=20.0,
+                )
+                hazard_summaries = [
+                    summarize_cell_hazards(cell.cell_id, hazard_links)
+                    for cell in selected_cells
+                ]
+
+            catalyst_links = []
+            if funnel_geometry_upload is not None:
+                geometry_payload = json.load(funnel_geometry_upload)
+                geometry_entries = registry_from_feature_collection(
+                    geometry_payload
+                )
+                catalyst_map = {}
+
+                try:
+                    for record in filter_provinces(
+                        fetch_osb_list(),
+                        ["Sakarya", "Bursa", "Balıkesir", "Çanakkale"],
+                    ):
+                        catalyst = record_to_catalyst(record)
+                        catalyst_map[catalyst.catalyst_id] = catalyst
+                except OSBUKProviderError as exc:
+                    st.warning(f"OSBÜK status feed alınamadı: {exc}")
+
+                try:
+                    for record in fetch_rail_projects():
+                        catalyst = rail_record_to_catalyst(record)
+                        catalyst_map[catalyst.catalyst_id] = catalyst
+                except AYGMRailProviderError as exc:
+                    st.warning(f"AYGM status feed alınamadı: {exc}")
+
+                spatial_result = batch_link_catalysts(
+                    selected_cells,
+                    catalyst_map,
+                    geometry_entries,
+                    max_distance_km=float(catalyst_distance_limit),
+                )
+                catalyst_links = list(spatial_result.links)
+
+            policy = CandidatePolicy(
+                urban_top_n=funnel_limit,
+                max_p90_slope_deg=float(slope_limit),
+                max_catalyst_distance_km=float(catalyst_distance_limit),
+                require_catalyst=require_catalyst,
+                exclude_hard_veto=True,
+            )
+            funnel_records = build_candidate_funnel(
+                urban_records,
+                terrain_records=terrain_records,
+                hazard_summaries=hazard_summaries,
+                catalyst_links=catalyst_links,
+                policy=policy,
+            )
+            survivors = surviving_candidates(funnel_records)
+
+            total = len(funnel_records)
+            dropped = sum(1 for row in funnel_records if row.status == "DROP")
+            gaps = sum(
+                1 for row in funnel_records
+                if row.status == "PASS_WITH_GAPS"
+            )
+            clean = sum(1 for row in funnel_records if row.status == "PASS")
+
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("GHSL aday", total)
+            m2.metric("PASS", clean)
+            m3.metric("PASS + veri açığı", gaps)
+            m4.metric("DROP", dropped)
+
+            result_rows = [
+                {
+                    "cell_id": row.cell_id,
+                    "lat": row.center_lat,
+                    "lon": row.center_lon,
+                    "urban_rank": row.urban_rank,
+                    "acceleration_pp_year": row.acceleration_pp_per_year,
+                    "cagr_2015_2020_pct": row.cagr_2015_2020_pct,
+                    "p90_slope_deg": row.p90_slope_deg,
+                    "nearest_catalyst_km": row.nearest_catalyst_km,
+                    "catalyst_stage_max": row.catalyst_stage_max,
+                    "hard_veto": row.hard_veto,
+                    "max_hazard_severity": row.max_hazard_severity,
+                    "status": row.status,
+                    "reasons": ", ".join(row.reasons),
+                }
+                for row in funnel_records
+            ]
+            result_df = pd.DataFrame(result_rows)
+            st.dataframe(
+                result_df,
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            survivor_df = pd.DataFrame(
+                [
+                    {
+                        "cell_id": row.cell_id,
+                        "lat": row.center_lat,
+                        "lon": row.center_lon,
+                        "status": row.status,
+                    }
+                    for row in survivors
+                ]
+            )
+            if not survivor_df.empty:
+                st.markdown("#### Hayatta kalan araştırma adayları")
+                st.map(
+                    survivor_df,
+                    latitude="lat",
+                    longitude="lon",
+                )
+
+            st.download_button(
+                "Candidate Funnel sonucunu CSV indir",
+                data=result_df.to_csv(index=False).encode("utf-8-sig"),
+                file_name="land_radar_candidate_funnel.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+
+            if hazard_links:
+                st.caption(
+                    f"Hazard link sayısı: {len(hazard_links)}. Hard-veto yalnız hücreyle kesişen "
+                    "ve kaynak dosyada hard_veto=true olan bulgulardan gelir."
+                )
+            if not terrain_records:
+                st.warning(
+                    "DEM batch çalışmadı/kullanılmadı. terrain_unknown hücreler düşük eğimli kabul edilmedi."
+                )
+            if not catalyst_links:
+                st.warning(
+                    "Doğrulanmış katalizör geometry registry bağlantısı yok. "
+                    "Katalizör verisi eksik olarak tutuldu."
+                )
+
+        except (
+            GHSLProviderError,
+            CopernicusDEMError,
+            ValueError,
+            json.JSONDecodeError,
+        ) as exc:
+            st.error(str(exc))
+
+
+with tab6:
     st.subheader("Araştırma laboratuvarı")
     st.caption(
         "Buradaki girişler manuel senaryo testidir; gerçek bölge verisi değildir. "
@@ -1172,7 +1476,7 @@ with tab5:
             "yatırım modeli olarak kabul edilmez."
         )
 
-with tab6:
+with tab7:
     st.subheader("Veri kaynağı kayıt defteri")
     st.dataframe(
         [
