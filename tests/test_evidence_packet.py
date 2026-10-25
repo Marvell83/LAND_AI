@@ -230,3 +230,56 @@ def test_evidence_packet_marks_price_known_only_when_scan_says_known(tmp_path: P
     assert packet["price"]["known"] is True
     assert packet["price"]["confidence_label"] == "MEDIUM"
     assert packet["evidence_coverage"]["coverage_pct"] == 85.7
+
+
+def test_evidence_packet_marks_verified_planning_known(tmp_path: Path):
+    deep = tmp_path / "deep.csv"
+    pd.DataFrame(
+        [{
+            "cell_id": "A",
+            "center_lat": 40.0,
+            "center_lon": 29.0,
+            "urban_rank": 1,
+            "acceleration_pp_per_year": 5.0,
+            "cagr_2015_2020_pct": 12.0,
+            "p90_slope_deg": 5.0,
+            "nearest_catalyst_km": 4.0,
+            "catalyst_stage_max": 4,
+            "hard_veto": False,
+            "max_hazard_severity": 2,
+            "status": "PASS",
+            "reasons": "",
+        }]
+    ).to_csv(deep, index=False)
+
+    planning = tmp_path / "planning.csv"
+    pd.DataFrame(
+        [{
+            "cell_id": "A",
+            "checked": True,
+            "cdp_wms_covered": True,
+            "cdp_wms_services": "csb_cdp_cb",
+            "registry_match_count": 1,
+            "active_plan_count": 1,
+            "finalized_uip_nip_verified_count": 1,
+            "planning_known": True,
+            "matched_plan_ids": "UIP-123",
+            "matched_plan_stages": "FINALIZED",
+        }]
+    ).to_csv(planning, index=False)
+
+    result = build_evidence_packets(
+        deep_scan_csv=deep,
+        sentinel_csv=None,
+        planning_csv=planning,
+        output_dir=tmp_path / "out",
+    )
+    payload = json.loads(
+        Path(result.output_master_json).read_text(encoding="utf-8")
+    )
+    packet = payload["candidates"][0]
+
+    assert packet["planning_legal"]["known"] is True
+    assert packet["planning_legal"]["eplan"]["checked"] is True
+    assert packet["planning_legal"]["eplan"]["matched_plan_ids"] == "UIP-123"
+    assert "planning_legal" not in packet["evidence_coverage"]["missing_layers"]
