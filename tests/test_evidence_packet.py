@@ -166,3 +166,67 @@ def test_evidence_packet_includes_partial_official_constraints(tmp_path: Path):
     assert packet["planning_legal"]["known"] is False
     assert packet["hazard"]["official_flood"]["checked"] is True
     assert packet["hazard"]["official_flood"]["max_severity"] == 3
+
+
+def test_evidence_packet_marks_price_known_only_when_scan_says_known(tmp_path: Path):
+    deep = tmp_path / "deep.csv"
+    pd.DataFrame(
+        [
+            {
+                "cell_id": "A",
+                "center_lat": 40.0,
+                "center_lon": 29.0,
+                "urban_rank": 1,
+                "acceleration_pp_per_year": 5.0,
+                "cagr_2015_2020_pct": 12.0,
+                "p90_slope_deg": 5.0,
+                "nearest_catalyst_km": 4.0,
+                "catalyst_stage_max": 4,
+                "hard_veto": False,
+                "max_hazard_severity": 2,
+                "status": "PASS",
+                "reasons": "",
+            }
+        ]
+    ).to_csv(deep, index=False)
+
+    sentinel = tmp_path / "sentinel.csv"
+    pd.DataFrame(
+        [{"cell_id": "A", "delta_ndvi": -0.1}]
+    ).to_csv(sentinel, index=False)
+
+    price = tmp_path / "price.csv"
+    pd.DataFrame(
+        [
+            {
+                "cell_id": "A",
+                "checked": True,
+                "known": True,
+                "price_basis": "nominal",
+                "used_rows": 12,
+                "median_price_per_m2": 1500,
+                "p25_price_per_m2": 1300,
+                "p75_price_per_m2": 1700,
+                "dispersion_ratio": 0.2667,
+                "median_age_days": 120,
+                "confidence_label": "MEDIUM",
+                "reason": "",
+            }
+        ]
+    ).to_csv(price, index=False)
+
+    result = build_evidence_packets(
+        deep_scan_csv=deep,
+        sentinel_csv=sentinel,
+        price_csv=price,
+        output_dir=tmp_path / "out",
+    )
+    payload = json.loads(
+        Path(result.output_master_json).read_text(encoding="utf-8")
+    )
+    packet = payload["candidates"][0]
+
+    assert packet["price"]["checked"] is True
+    assert packet["price"]["known"] is True
+    assert packet["price"]["confidence_label"] == "MEDIUM"
+    assert packet["evidence_coverage"]["coverage_pct"] == 85.7
