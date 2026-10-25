@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.12
+## v0.13
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -65,6 +65,8 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - transparent 100 → 30 deep scan (DEM + hazard + catalyst geometry)
 - Top-30 için cached Sentinel-2 seasonal confirmation
 - NDVI/NDBI/BSI/SCL değişimini ham kanıt olarak birleştiren `top30_with_sentinel.csv`
+- hücre başına Candidate Evidence Packet
+- evidence coverage yalnız veri kapsamı olarak hesaplanır; yatırım puanı değildir
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
 - Windows tek-tık başlatıcı ve güvenli secrets örneği
@@ -116,12 +118,13 @@ pytest -q
 15. GHSL installer + readiness + first real 500→100 scan workflow ✅
 16. Transparent 100→30 deep scan workflow ✅
 17. Sentinel Top-30 recent-change confirmation ✅
-18. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-19. KGM stratejik karayolu proje akışı
-20. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
-21. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-22. Backtest ve ağırlık kalibrasyonu
-23. Evidence Packet + 30 → 10 → parsel elemesi
+18. Candidate Evidence Packets ✅
+19. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+20. KGM stratejik karayolu proje akışı
+21. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
+22. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+23. Backtest ve ağırlık kalibrasyonu
+24. Evidence-based 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -197,6 +200,22 @@ python scripts/sentinel_confirm.py
 Çıktı ham NDVI/NDBI/BSI/SCL değişimidir; otomatik yapılaşma etiketi değildir.
 
 Detay: [docs/SENTINEL_TOP30.md](docs/SENTINEL_TOP30.md)
+
+Top-30 için tek hücrelik kanıt paketleri:
+
+```
+KANIT_PAKETLERI.bat
+```
+
+veya:
+
+```bash
+python scripts/build_evidence_packets.py
+```
+
+Çıktılar tarihsel büyüme, terrain, hazard, catalyst ve varsa Sentinel kanıtını tek kayıtta birleştirir; planning/legal ve fiyat eksikse bunu açıkça gösterir.
+
+Detay: [docs/EVIDENCE_PACKETS.md](docs/EVIDENCE_PACKETS.md)
 
 ## Veri kurulumu
 
