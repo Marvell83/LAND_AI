@@ -73,6 +73,7 @@ def prepare_price_data(
     subject_lon: float | None = None,
     max_distance_km: float | None = None,
     land_type: str | None = None,
+    apply_outlier_filter: bool = True,
 ) -> tuple[pd.DataFrame, int]:
     missing = [column for column in REQUIRED_COLUMNS if column not in frame.columns]
     if missing:
@@ -139,7 +140,7 @@ def prepare_price_data(
 
     # Robust outlier control on log price/m². This avoids a few extreme listings
     # dominating the comparable distribution.
-    if len(df) >= 5:
+    if apply_outlier_filter and len(df) >= 5:
         log_values = np.log(df["price_per_m2"].to_numpy(dtype="float64"))
         median_log = float(np.median(log_values))
         mad = float(np.median(np.abs(log_values - median_log)))
