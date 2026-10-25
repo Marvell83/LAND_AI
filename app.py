@@ -13,6 +13,13 @@ from land_radar.catalyst import STAGE_LABELS
 from land_radar.config import resolve_cdse_credentials
 from land_radar.data_sources import SOURCES
 from land_radar.geometry import bbox_for_cell
+from land_radar.geometry_import import (
+    GeometryImportError,
+    append_registry_entries,
+    make_registry_entries,
+    raw_geojson_geometries,
+    raw_kml_geometries,
+)
 from land_radar.inflation import CPIIndex, InflationDataError, add_real_price_columns
 from land_radar.models import CellMetrics, HardRiskFlags, LandCell
 from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
@@ -29,6 +36,7 @@ from land_radar.providers.kgm_highway import (
     KGMHighwayProviderError,
     fetch_highway_projects,
     filter_project_keywords as filter_highway_keywords,
+    record_to_catalyst as highway_record_to_catalyst,
 )
 from land_radar.providers.osm_geometry import OSMGeometryProviderError, best_name_matches, fetch_industrial_geometries, fetch_rail_geometries, to_geometry_evidence
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
@@ -899,6 +907,142 @@ with tab3:
             st.error(str(exc))
 
     st.divider()
+    st.markdown("#### Ham GeoJSON / KML → Geometry Registry")
+    st.caption(
+        "Doğrulanmış güzergâh veya sınır dosyasını provenance bilgisiyle registry'ye alır. "
+        "Şematik/elle sayısallaştırılmış rota resmî vektör gibi işaretlenemez."
+    )
+
+    raw_geom_upload = st.file_uploader(
+        "Ham geometri yükle",
+        type=["geojson", "json", "kml"],
+        key="raw_geometry_import",
+    )
+    gi1, gi2 = st.columns(2)
+    raw_catalyst_id = gi1.text_input(
+        "Catalyst ID",
+        value="road:kgm:",
+        key="raw_geometry_catalyst_id",
+        help="KGM için kgm_highway_projects.csv içindeki project_id değerini kullan.",
+    )
+    raw_source = gi2.text_input(
+        "Geometri kaynağı",
+        value="KGM / resmî geometri kaynağı",
+        key="raw_geometry_source",
+    )
+    raw_source_url = st.text_input(
+        "Kaynak URL (HTTPS zorunlu)",
+        value="https://www.kgm.gov.tr/",
+        key="raw_geometry_source_url",
+    )
+
+    gi3, gi4, gi5 = st.columns(3)
+    raw_role = gi3.selectbox(
+        "Geometri rolü",
+        options=[
+            "official_vector_route",
+            "digitized_official_map",
+            "schematic_route",
+            "official_boundary",
+            "observed_geometry",
+        ],
+        index=0,
+        key="raw_geometry_role",
+    )
+    default_confidence = (
+        98
+        if raw_role == "official_vector_route"
+        else 75
+        if raw_role == "digitized_official_map"
+        else 55
+        if raw_role == "schematic_route"
+        else 90
+    )
+    raw_confidence = gi4.number_input(
+        "Geometri güveni",
+        min_value=0.0,
+        max_value=100.0,
+        value=float(default_confidence),
+        step=1.0,
+        key="raw_geometry_confidence",
+    )
+    raw_observed_date = gi5.date_input(
+        "Gözlem tarihi",
+        value=date.today(),
+        key="raw_geometry_observed_date",
+    )
+    raw_manual_verified = st.checkbox(
+        "Manuel doğrulandı",
+        value=raw_role in {"digitized_official_map", "schematic_route"},
+        key="raw_geometry_manual_verified",
+    )
+
+    if raw_geom_upload is not None:
+        try:
+            suffix = Path(raw_geom_upload.name).suffix.casefold()
+            raw_bytes = raw_geom_upload.getvalue()
+            if suffix == ".kml":
+                raw_geometries = raw_kml_geometries(
+                    raw_bytes.decode("utf-8-sig")
+                )
+            else:
+                raw_geometries = raw_geojson_geometries(
+                    json.loads(raw_bytes.decode("utf-8-sig"))
+                )
+
+            st.success(
+                f"{len(raw_geometries)} ham geometri okundu. Registry'ye kaydetmeden önce metadata'yı kontrol et."
+            )
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "name": item.name,
+                            "geometry_type": item.geometry_geojson.get("type"),
+                            "feature_id": item.feature_id,
+                        }
+                        for item in raw_geometries
+                    ]
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            if st.button(
+                "Ham geometriyi Geometry Registry'ye ekle",
+                use_container_width=True,
+                key="append_raw_geometry",
+            ):
+                entries = make_registry_entries(
+                    raw_geometries,
+                    catalyst_id=raw_catalyst_id,
+                    source=raw_source,
+                    source_url=raw_source_url,
+                    observed_date=raw_observed_date,
+                    confidence=float(raw_confidence),
+                    geometry_role=raw_role,
+                    manual_verified=raw_manual_verified,
+                )
+                registry_file = Path(
+                    "data/processed/geometry_registry.geojson"
+                )
+                combined = append_registry_entries(
+                    registry_file,
+                    entries,
+                )
+                st.success(
+                    f"{len(entries)} geometri eklendi. Registry toplam: {len(combined)}"
+                )
+                st.caption(str(registry_file))
+        except (
+            GeometryImportError,
+            ValueError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+        ) as exc:
+            st.error(str(exc))
+
+    st.divider()
     st.markdown("#### Geometry Registry · GeoJSON")
     st.caption(
         "Resmî veya manuel doğrulanmış geometriyi katalizör kimliğiyle saklamak için. "
@@ -1007,6 +1151,13 @@ with tab3:
                         catalyst_map[catalyst.catalyst_id] = catalyst
                 except AYGMRailProviderError as exc:
                     st.warning(f"AYGM katalizörleri alınamadı: {exc}")
+
+                try:
+                    for record in fetch_highway_projects():
+                        catalyst = highway_record_to_catalyst(record)
+                        catalyst_map[catalyst.catalyst_id] = catalyst
+                except KGMHighwayProviderError as exc:
+                    st.warning(f"KGM otoyol katalizörleri alınamadı: {exc}")
 
                 batch_result = batch_link_catalysts(
                     spatial_cells[:batch_limit],
