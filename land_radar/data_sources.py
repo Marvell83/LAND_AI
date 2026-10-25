@@ -19,7 +19,7 @@ SOURCES = (
     DataSource("OpenStreetMap / Overpass", "access", "Road and accessibility context", "probe_integrated"),
     DataSource("OSBÜK OSB listesi", "catalyst", "Current OSB status feed and stage mapping", "status_feed_ready"),
     DataSource("KGM official data", "catalyst", "Road infrastructure evidence", "planned"),
-    DataSource("TCDD / UAB official data", "catalyst", "Rail and transport evidence", "planned"),
+    DataSource("AYGM / UAB railway projects", "catalyst", "Official railway project status groups", "status_feed_ready"),
     DataSource("Municipal / e-Plan sources", "planning", "Planning decisions and maturity", "planned"),
     DataSource("AFAD / MTA / official hazard data", "risk", "Flood, landslide, geology and hazards", "planned"),
     DataSource("Market / comparable price dataset", "price", "Relative price and mispricing", "unresolved"),
