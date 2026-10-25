@@ -123,9 +123,9 @@ The current version does **not** claim:
 
 Those claims require separate evidence and calibration.
 
-## 7. Next spatial milestone
+## 7. Geometry Registry — implemented
 
-Build a persistent Geometry Registry:
+v0.8 includes a persistent GeoJSON Geometry Registry with:
 
 ```
 catalyst_id
@@ -138,9 +138,21 @@ geometry_confidence
 manual_verified
 ```
 
-Then batch-link that registry against the pilot grid.
+The registry can be validated, saved/loaded and batch-linked against pilot grid cells. The Streamlit UI can upload a registry GeoJSON and export resulting spatial links as CSV.
 
-That enables:
+## 8. Next spatial milestone
+
+Replace provisional geometry evidence with authoritative geometry wherever it becomes available and build a reusable local geometry cache.
+
+Priority order:
+
+1. official/verified OSB geometry,
+2. verified railway project corridor geometry,
+3. strategic KGM project geometry,
+4. official hazard polygons,
+5. batch spatial joins across the entire shortlisted grid.
+
+The target flow is now:
 
 ```
 500 cells
@@ -151,11 +163,11 @@ terrain
   ↓
 road access
   ↓
-catalyst distance
+registry catalyst distance
   ↓
-risk
+official risk geometry
   ↓
 top research candidates
 ```
 
-without re-querying public endpoints for every cell.
+Public endpoints should not be re-queried for every cell once a dated geometry observation has been stored in the registry.
