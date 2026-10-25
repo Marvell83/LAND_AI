@@ -1107,20 +1107,26 @@ with tab5:
         "DEM/eğim ve açık hard-veto riskleriyle eleme yapar; eksik veri varsa bunu GAP olarak gösterir."
     )
 
-    rf1, rf2, rf3 = st.columns(3)
+    rf1, rf2, rf3, rf4 = st.columns(4)
     funnel_cell_km = rf1.select_slider(
         "Funnel hücre boyutu (km)",
         options=[2.0, 5.0, 10.0],
         value=5.0,
         key="funnel_cell_km",
     )
-    funnel_limit = rf2.select_slider(
-        "İlk taranacak hücre",
-        options=[25, 50, 100],
-        value=25,
-        key="funnel_limit",
+    scan_pool = rf2.select_slider(
+        "GHSL tarama havuzu",
+        options=[100, 250, 500],
+        value=250,
+        key="funnel_scan_pool",
     )
-    slope_limit = rf3.slider(
+    candidate_target = rf3.select_slider(
+        "İvme sonrası finalist",
+        options=[25, 50, 100],
+        value=50,
+        key="funnel_candidate_target",
+    )
+    slope_limit = rf4.slider(
         "P90 eğim üst sınırı (°)",
         min_value=2.0,
         max_value=30.0,
@@ -1223,13 +1229,23 @@ with tab5:
     if st.button("Candidate Funnel çalıştır", use_container_width=True):
         try:
             funnel_cells = build_pilot_grid(funnel_cell_km)
-            selected_cells = funnel_cells[:funnel_limit]
+            pool_limit = min(int(scan_pool), len(funnel_cells))
+            target_limit = min(int(candidate_target), pool_limit)
 
-            urban_records = scan_grid_ghsl(
-                selected_cells,
+            urban_pool = scan_grid_ghsl(
+                funnel_cells,
                 funnel_ghsl_dir,
-                limit=funnel_limit,
+                limit=pool_limit,
             )
+            urban_ranked = rank_accelerating(urban_pool)
+            top_urban = urban_ranked[:target_limit]
+
+            cell_by_id = {cell.cell_id: cell for cell in funnel_cells[:pool_limit]}
+            selected_cells = [
+                cell_by_id[row.cell_id]
+                for row in top_urban
+                if row.cell_id in cell_by_id
+            ]
 
             terrain_records = []
             if use_dem and funnel_cdse_credentials is not None:
@@ -1240,7 +1256,7 @@ with tab5:
                 terrain_records = scan_terrain(
                     selected_cells,
                     dem_client,
-                    limit=funnel_limit,
+                    limit=target_limit,
                     cache_dir="data/cache/terrain",
                     dem_instance="COPERNICUS_90",
                 )
@@ -1294,14 +1310,14 @@ with tab5:
                 catalyst_links = list(spatial_result.links)
 
             policy = CandidatePolicy(
-                urban_top_n=funnel_limit,
+                urban_top_n=target_limit,
                 max_p90_slope_deg=float(slope_limit),
                 max_catalyst_distance_km=float(catalyst_distance_limit),
                 require_catalyst=require_catalyst,
                 exclude_hard_veto=True,
             )
             funnel_records = build_candidate_funnel(
-                urban_records,
+                urban_pool,
                 terrain_records=terrain_records,
                 hazard_summaries=hazard_summaries,
                 catalyst_links=catalyst_links,
@@ -1318,10 +1334,14 @@ with tab5:
             clean = sum(1 for row in funnel_records if row.status == "PASS")
 
             m1, m2, m3, m4 = st.columns(4)
-            m1.metric("GHSL aday", total)
+            m1.metric("GHSL tarama havuzu", len(urban_pool))
             m2.metric("PASS", clean)
             m3.metric("PASS + veri açığı", gaps)
             m4.metric("DROP", dropped)
+            st.caption(
+                f"Önce {len(urban_pool)} hücre GHSL ivmesiyle tarandı; "
+                f"yalnız ilk {total} finalistte DEM/risk/katalizör derinleştirildi."
+            )
 
             result_rows = [
                 {
