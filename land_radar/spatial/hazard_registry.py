@@ -9,6 +9,7 @@ from ..hazard import HazardGeometry, HazardSeverity
 
 
 _SEVERITY_BY_TEXT = {
+    "UNKNOWN": HazardSeverity.UNKNOWN,
     "NONE": HazardSeverity.NONE,
     "LOW": HazardSeverity.LOW,
     "MEDIUM": HazardSeverity.MEDIUM,
