@@ -14,7 +14,7 @@ class DataSource:
 
 SOURCES = (
     DataSource("GHSL GHS-BUILT-S R2023A", "urban", "Historical built-up structural baseline", "local_engine_ready"),
-    DataSource("Copernicus Data Space / Sentinel-2 STAC", "satellite", "Recent scene discovery and cloud-screened availability", "probe_integrated"),
+    DataSource("Copernicus Data Space / Sentinel-2 L2A", "satellite", "Scene discovery plus two-period spectral/SCL change", "spectral_engine_ready"),
     DataSource("Copernicus DEM GLO-90", "terrain", "Elevation and slope", "oauth_adapter_ready"),
     DataSource("OpenStreetMap / Overpass", "access", "Road and accessibility context", "probe_integrated"),
     DataSource("OSB official data", "catalyst", "Industrial zones and expansion evidence", "planned"),
