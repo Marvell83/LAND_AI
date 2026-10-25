@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.13
+## v0.14
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -66,6 +66,10 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - Top-30 için cached Sentinel-2 seasonal confirmation
 - NDVI/NDBI/BSI/SCL değişimini ham kanıt olarak birleştiren `top30_with_sentinel.csv`
 - hücre başına Candidate Evidence Packet
+- Tarım ve Orman Bakanlığı KorunanAlanlarWFS doğrudan GeoJSON entegrasyonu
+- USBS resmî taşkın risk katmanı doğrudan GeoJSON entegrasyonu
+- Top-30 Official Constraints Scan
+- protected-area + flood alt-kanıtlarının Evidence Packet entegrasyonu
 - evidence coverage yalnız veri kapsamı olarak hesaplanır; yatırım puanı değildir
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
@@ -119,12 +123,14 @@ pytest -q
 16. Transparent 100→30 deep scan workflow ✅
 17. Sentinel Top-30 recent-change confirmation ✅
 18. Candidate Evidence Packets ✅
-19. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-20. KGM stratejik karayolu proje akışı
-21. AFAD/USBS/TUCBS doğrulanmış doğrudan servis entegrasyonları
-22. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-23. Backtest ve ağırlık kalibrasyonu
-24. Evidence-based 30 → 10 → parsel elemesi
+19. Tarım ve Orman protected-area + USBS flood direct services ✅
+20. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+21. KGM stratejik karayolu proje akışı
+22. e-Plan / active-zoning güvenilir kanıt adaptörü
+23. AFAD/TUCBS heyelan ve diğer resmî risk servisleri
+24. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+25. Backtest ve ağırlık kalibrasyonu
+26. Evidence-based 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -216,6 +222,28 @@ python scripts/build_evidence_packets.py
 Çıktılar tarihsel büyüme, terrain, hazard, catalyst ve varsa Sentinel kanıtını tek kayıtta birleştirir; planning/legal ve fiyat eksikse bunu açıkça gösterir.
 
 Detay: [docs/EVIDENCE_PACKETS.md](docs/EVIDENCE_PACKETS.md)
+
+Top-30 için resmî korunan alan ve USBS taşkın taraması:
+
+```bash
+bash OFFICIAL_KISITLAR_TOP30.sh
+```
+
+veya:
+
+```bash
+python scripts/official_constraints_scan.py
+```
+
+Ardından Evidence Packet'leri yeniden üret:
+
+```bash
+python scripts/build_evidence_packets.py
+```
+
+Korunan alan eşleşmesi otomatik hard-veto değildir; e-Plan ayrı kanıt kanalı olarak hâlâ eksiktir.
+
+Detay: [docs/OFFICIAL_CONSTRAINTS.md](docs/OFFICIAL_CONSTRAINTS.md)
 
 ## Veri kurulumu
 
