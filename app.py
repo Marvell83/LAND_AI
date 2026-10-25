@@ -14,6 +14,7 @@ from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
 from land_radar.providers.copernicus_dem import CopernicusDEMError, CopernicusProcessClient
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
 from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
+from land_radar.providers.aygm_rail import AYGMRailProviderError, fetch_rail_projects, filter_project_keywords, record_to_catalyst as rail_record_to_catalyst
 from land_radar.providers.osbuk import OSBUKProviderError, fetch_osb_list, filter_provinces, record_to_catalyst
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
@@ -577,4 +578,36 @@ with tab4:
             st.success(f"{len(rows)} OSB kaydı alındı.")
             st.dataframe(rows, use_container_width=True, hide_index=True)
         except OSBUKProviderError as exc:
+            st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### AYGM / UAB demiryolu katalizör akışı")
+    st.caption(
+        "AYGM'nin resmî devam eden / tamamlanan / planlanan proje gruplarını "
+        "Catalyst State Machine'e çevirir. Güzergâh geometrisi henüz bağlanmadığı "
+        "için hücre mesafesi veya etki yarıçapı hesaplanmaz."
+    )
+    rail_keywords = ["bandırma", "bursa", "osmaneli", "sakarya"]
+    if st.button("Pilot koridor demiryolu projelerini getir", use_container_width=True):
+        try:
+            rail_records = filter_project_keywords(
+                fetch_rail_projects(),
+                rail_keywords,
+            )
+            rail_rows = []
+            for record in rail_records:
+                catalyst = rail_record_to_catalyst(record)
+                rail_rows.append(
+                    {
+                        "project": record.name,
+                        "official_group": record.status_group,
+                        "stage": int(catalyst.stage),
+                        "stage_label": STAGE_LABELS[catalyst.stage],
+                        "evidence_confidence": catalyst.evidence_confidence,
+                        "source": record.source_url,
+                    }
+                )
+            st.success(f"{len(rail_rows)} demiryolu proje kaydı eşleşti.")
+            st.dataframe(rail_rows, use_container_width=True, hide_index=True)
+        except AYGMRailProviderError as exc:
             st.error(str(exc))
