@@ -5,6 +5,7 @@ from pathlib import Path
 
 import streamlit as st
 
+from land_radar.catalyst import STAGE_LABELS
 from land_radar.config import resolve_cdse_credentials
 from land_radar.data_sources import SOURCES
 from land_radar.geometry import bbox_for_cell
@@ -13,6 +14,7 @@ from land_radar.pilot import SAKARYA_CANAKKALE, build_pilot_grid
 from land_radar.providers.copernicus_dem import CopernicusDEMError, CopernicusProcessClient
 from land_radar.providers.copernicus_stac import CopernicusSTACError, search_sentinel2_l2a
 from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, discover_epoch_file, summarize_built_up
+from land_radar.providers.osbuk import OSBUKProviderError, fetch_osb_list, filter_provinces, record_to_catalyst
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
 from land_radar.scoring import score_cell
@@ -547,3 +549,32 @@ with tab4:
         use_container_width=True,
         hide_index=True,
     )
+
+    st.divider()
+    st.markdown("#### OSBÜK pilot durum akışı")
+    st.caption(
+        "Bu aşama yalnız OSB'nin yayımlanan durumunu ve katalizör aşamasını gösterir. "
+        "Koordinat/geometri olmadığı için seçili hücreye mesafe hesabı yapılmaz."
+    )
+    pilot_provinces = ["Sakarya", "Bursa", "Balıkesir", "Çanakkale"]
+    if st.button("Pilot illerin OSB durumlarını getir", use_container_width=True):
+        try:
+            osb_records = filter_provinces(fetch_osb_list(), pilot_provinces)
+            rows = []
+            for record in osb_records:
+                catalyst = record_to_catalyst(record)
+                rows.append(
+                    {
+                        "province": record.province,
+                        "osb": record.name,
+                        "raw_status": record.status,
+                        "stage": int(catalyst.stage),
+                        "stage_label": STAGE_LABELS[catalyst.stage],
+                        "evidence_confidence": catalyst.evidence_confidence,
+                        "address": record.address,
+                    }
+                )
+            st.success(f"{len(rows)} OSB kaydı alındı.")
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+        except OSBUKProviderError as exc:
+            st.error(str(exc))
