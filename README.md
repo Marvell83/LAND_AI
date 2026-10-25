@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.17
+## v0.18
 
 Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 
@@ -80,6 +80,10 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - doğrulanmış TUCBS/ULASAV bölgesel ÇDP WMS registry
 - FINALIZED + spatially verified UIP/NIP kuralıyla `planning_legal.known`
 - planning kanıtının Evidence Packet ve Top-10 Gate entegrasyonu
+- generic OGC WFS GeoJSON client
+- configurable MTA/TUCBS heyelan envanter taraması
+- USBS flood + MTA landslide core hazard coverage politikası
+- AFAD duyarlılık katmanını erişim kısıtı nedeniyle ayrı/eksik tutma
 - evidence coverage yalnız veri kapsamı olarak hesaplanır; yatırım puanı değildir
 - eksik hazard katmanını açıkça `hazard_unknown` olarak işaretleme
 - Windows GHSL kurulum, ilk tarama ve derin tarama başlatıcıları
@@ -137,13 +141,14 @@ pytest -q
 20. Top-30 comparable-price evidence scan ✅
 21. 30→10 Evidence Gate ✅
 22. Planning Intelligence / e-Plan evidence registry ✅
-23. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
-24. KGM stratejik karayolu proje akışı
-25. e-Plan public interface için stabil otomatik vektör/veri adaptörü bulunursa doğrudan entegrasyon
-26. AFAD/TUCBS heyelan ve diğer resmî risk servisleri
-27. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-28. Backtest ve ağırlık kalibrasyonu
-29. Gate sonrası evidence-based Top-10 review → parsel elemesi
+23. MTA/TUCBS landslide inventory adapter ✅
+24. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+25. KGM stratejik karayolu proje akışı
+26. e-Plan public interface için stabil otomatik vektör/veri adaptörü bulunursa doğrudan entegrasyon
+27. AFAD erişilebilir duyarlılık / diğer resmî risk servisleri
+28. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+29. Backtest ve ağırlık kalibrasyonu
+30. Gate sonrası evidence-based Top-10 review → parsel elemesi
 
 ## Güvenilirlik kuralı
 
@@ -314,6 +319,16 @@ bash TOP10_GATE.sh
 `planning_legal.known` yalnız tarih-kesitinde geçerli, FINALIZED, spatially verified UIP/NIP kanıtıyla açılır. Bölgesel ÇDP WMS kapsamı tek başına imar hakkı sayılmaz.
 
 Detay: [docs/PLANNING_INTELLIGENCE.md](docs/PLANNING_INTELLIGENCE.md)
+
+MTA/TUCBS heyelan envanter WFS bilgisi doğrulandıktan sonra Top-30 taraması:
+
+```bash
+bash MTA_HEYELAN_TOP30.sh
+```
+
+Servis URL/typeName bilinmiyorsa LAND RADAR bunları tahmin etmez ve heyelan envanterini unchecked bırakır.
+
+Detay: [docs/LANDSLIDE_INTELLIGENCE.md](docs/LANDSLIDE_INTELLIGENCE.md)
 
 ## Veri kurulumu
 
