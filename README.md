@@ -25,7 +25,7 @@ Bu nedenle sistem tek bir sihirli puana dayanmaz. Ana bileşenler ayrı gösteri
 
 İlk araştırma evreni Sakarya → Bursa/Balıkesir → Çanakkale koridorudur. İlk aşamada parsel bazına inmeden grid/hücre seviyesinde tarama yapılacaktır.
 
-## v0.4
+## v0.5
 
 Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
 
@@ -38,6 +38,8 @@ Mevcut sürüm bir **çok-kaynaklı araştırma çekirdeğidir**:
 - kontrollü GHSL batch grid taraması
 - Copernicus DEM GLO-90 OAuth/Process API adaptörü
 - yükseklik ve eğim istatistikleri
+- Sentinel-2 iki dönem NDVI/NDBI/BSI + SCL yüzey değişim motoru
+- kanıt zorunlu 0→6 Catalyst State Machine
 - kanıt/evidence veri modeli
 - point-in-time backtest güvenlik altyapısı
 - hard-risk veto mantığı
@@ -69,12 +71,13 @@ pytest -q
 2. GHSL geçmiş yapılaşma motoru ✅
 3. Sentinel-2 STAC keşfi ✅
 4. DEM/eğim motoru ✅
-5. Sentinel piksel değişim motoru
-6. OSB/yol/demiryolu resmî katalizör veritabanı
-7. Hard-risk coğrafi katmanları
-8. Point-in-time fiyat verisi ve Mispricing
-9. Backtest ve ağırlık kalibrasyonu
-10. 100 → 30 → 10 → parsel elemesi
+5. Sentinel piksel değişim motoru ✅
+6. Catalyst State Machine ✅
+7. OSB/yol/demiryolu resmî katalizör veritabanı
+8. Hard-risk coğrafi katmanları
+9. Point-in-time fiyat verisi ve Mispricing
+10. Backtest ve ağırlık kalibrasyonu
+11. 100 → 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
