@@ -76,6 +76,7 @@ def build_evidence_packets(
     protected_csv: str | Path | None = "data/output/official_constraints/protected_area_top30.csv",
     flood_csv: str | Path | None = "data/output/official_constraints/flood_risk_top30.csv",
     price_csv: str | Path | None = "data/output/price_scan/price_top30.csv",
+    planning_csv: str | Path | None = "data/output/planning_scan/planning_top30.csv",
     output_dir: str | Path = "data/output/evidence_packets",
 ) -> EvidencePacketBuildResult:
     deep_path = Path(deep_scan_csv)
@@ -129,6 +130,11 @@ def build_evidence_packets(
         if price_csv is not None
         else None
     )
+    planning_path = (
+        Path(planning_csv)
+        if planning_csv is not None
+        else None
+    )
     first_scan = _table_by_cell(
         first_scan_path,
         label="First-scan",
@@ -149,6 +155,10 @@ def build_evidence_packets(
         price_path,
         label="Price evidence",
     )
+    planning = _table_by_cell(
+        planning_path,
+        label="Planning evidence",
+    )
 
     output_dir = Path(output_dir)
     packet_dir = output_dir / "cells"
@@ -165,6 +175,7 @@ def build_evidence_packets(
         protected_row = protected.get(cell_id)
         flood_row = flood.get(cell_id)
         price_row = price.get(cell_id)
+        planning_row = planning.get(cell_id)
 
         protected_checked = bool(
             protected_row
@@ -182,6 +193,14 @@ def build_evidence_packets(
             price_row
             and price_row.get("known") in (True, 1, "True", "true")
         )
+        planning_checked = bool(
+            planning_row
+            and planning_row.get("checked") in (True, 1, "True", "true")
+        )
+        planning_known = bool(
+            planning_row
+            and planning_row.get("planning_known") in (True, 1, "True", "true")
+        )
 
         layer_known = {
             "urban_history": (
@@ -197,10 +216,7 @@ def build_evidence_packets(
                 and _optional(row.get("nearest_catalyst_km")) is not None
             ),
             "sentinel_recent_change": sentinel_row is not None,
-            # Protected-area checks are only one sub-layer. e-Plan zoning
-            # remains a separate requirement, so planning/legal is still
-            # incomplete until both are checked.
-            "planning_legal": False,
+            "planning_legal": planning_known,
             "price": price_known,
         }
 
@@ -299,7 +315,7 @@ def build_evidence_packets(
             },
             "sentinel_recent_change": sentinel_row,
             "planning_legal": {
-                "known": False,
+                "known": planning_known,
                 "protected_area": {
                     "checked": protected_checked,
                     "finding_count": (
@@ -329,15 +345,53 @@ def build_evidence_packets(
                     ),
                 },
                 "eplan": {
-                    "checked": False,
+                    "checked": planning_checked,
+                    "planning_known": planning_known,
+                    "cdp_wms_covered": (
+                        bool(planning_row.get("cdp_wms_covered"))
+                        if planning_row
+                        else None
+                    ),
+                    "cdp_wms_services": (
+                        _optional(planning_row.get("cdp_wms_services"))
+                        if planning_row
+                        else None
+                    ),
+                    "registry_match_count": (
+                        _optional(planning_row.get("registry_match_count"))
+                        if planning_row
+                        else None
+                    ),
+                    "active_plan_count": (
+                        _optional(planning_row.get("active_plan_count"))
+                        if planning_row
+                        else None
+                    ),
+                    "finalized_uip_nip_verified_count": (
+                        _optional(
+                            planning_row.get("finalized_uip_nip_verified_count")
+                        )
+                        if planning_row
+                        else None
+                    ),
+                    "matched_plan_ids": (
+                        _optional(planning_row.get("matched_plan_ids"))
+                        if planning_row
+                        else None
+                    ),
+                    "matched_plan_stages": (
+                        _optional(planning_row.get("matched_plan_stages"))
+                        if planning_row
+                        else None
+                    ),
                     "note": (
-                        "e-Plan zoning / active-plan evidence is still a "
-                        "separate unchecked channel."
+                        "CDP WMS coverage is context only. planning_known "
+                        "requires finalized spatially verified UIP/NIP evidence."
                     ),
                 },
                 "note": (
-                    "planning_legal becomes complete only after both protected-"
-                    "area/legal constraints and e-Plan zoning evidence are checked."
+                    "planning_legal is complete only when the e-Plan/UIP/NIP "
+                    "channel satisfies LAND RADAR's verified-final-plan rule."
                 ),
             },
             "price": {
@@ -430,7 +484,8 @@ def build_evidence_packets(
                 "sentinel_known": layer_known["sentinel_recent_change"],
                 "protected_area_checked": protected_checked,
                 "flood_checked": flood_checked,
-                "planning_known": False,
+                "planning_checked": planning_checked,
+                "planning_known": planning_known,
                 "price_checked": price_checked,
                 "price_known": price_known,
                 "evidence_coverage_pct": coverage_pct,
