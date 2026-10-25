@@ -73,6 +73,8 @@ def build_evidence_packets(
     deep_scan_csv: str | Path = "data/output/deep_scan/deep_scan_top30.csv",
     first_scan_csv: str | Path | None = "data/output/first_scan/ghsl_top_candidates.csv",
     sentinel_csv: str | Path | None = "data/output/sentinel_confirm/sentinel_top30_change.csv",
+    protected_csv: str | Path | None = "data/output/official_constraints/protected_area_top30.csv",
+    flood_csv: str | Path | None = "data/output/official_constraints/flood_risk_top30.csv",
     output_dir: str | Path = "data/output/evidence_packets",
 ) -> EvidencePacketBuildResult:
     deep_path = Path(deep_scan_csv)
@@ -111,6 +113,16 @@ def build_evidence_packets(
         if sentinel_csv is not None
         else None
     )
+    protected_path = (
+        Path(protected_csv)
+        if protected_csv is not None
+        else None
+    )
+    flood_path = (
+        Path(flood_csv)
+        if flood_csv is not None
+        else None
+    )
     first_scan = _table_by_cell(
         first_scan_path,
         label="First-scan",
@@ -118,6 +130,14 @@ def build_evidence_packets(
     sentinel = _table_by_cell(
         sentinel_path,
         label="Sentinel evidence",
+    )
+    protected = _table_by_cell(
+        protected_path,
+        label="Protected-area evidence",
+    )
+    flood = _table_by_cell(
+        flood_path,
+        label="Flood evidence",
     )
 
     output_dir = Path(output_dir)
@@ -132,6 +152,17 @@ def build_evidence_packets(
         reasons = _reason_set(row.get("reasons"))
         first_scan_row = first_scan.get(cell_id, {})
         sentinel_row = sentinel.get(cell_id)
+        protected_row = protected.get(cell_id)
+        flood_row = flood.get(cell_id)
+
+        protected_checked = bool(
+            protected_row
+            and protected_row.get("checked") in (True, 1, "True", "true")
+        )
+        flood_checked = bool(
+            flood_row
+            and flood_row.get("checked") in (True, 1, "True", "true")
+        )
 
         layer_known = {
             "urban_history": (
@@ -147,6 +178,9 @@ def build_evidence_packets(
                 and _optional(row.get("nearest_catalyst_km")) is not None
             ),
             "sentinel_recent_change": sentinel_row is not None,
+            # Protected-area checks are only one sub-layer. e-Plan zoning
+            # remains a separate requirement, so planning/legal is still
+            # incomplete until both are checked.
             "planning_legal": False,
             "price": False,
         }
@@ -207,6 +241,33 @@ def build_evidence_packets(
                     row.get("max_hazard_severity")
                 ),
                 "known": layer_known["hazard"],
+                "official_flood": {
+                    "checked": flood_checked,
+                    "finding_count": (
+                        _optional(flood_row.get("finding_count"))
+                        if flood_row
+                        else None
+                    ),
+                    "max_severity": (
+                        _optional(flood_row.get("max_severity"))
+                        if flood_row
+                        else None
+                    ),
+                    "max_overlap_ratio": (
+                        _optional(flood_row.get("max_overlap_ratio"))
+                        if flood_row
+                        else None
+                    ),
+                    "nearest_hazard_km": (
+                        _optional(flood_row.get("nearest_hazard_km"))
+                        if flood_row
+                        else None
+                    ),
+                    "note": (
+                        "This sub-layer covers official USBS flood polygons only; "
+                        "it does not make the full hazard layer complete."
+                    ),
+                },
             },
             "catalyst": {
                 "nearest_catalyst_km": _optional(
@@ -220,7 +281,45 @@ def build_evidence_packets(
             "sentinel_recent_change": sentinel_row,
             "planning_legal": {
                 "known": False,
-                "note": "Not integrated into automated candidate packet yet.",
+                "protected_area": {
+                    "checked": protected_checked,
+                    "finding_count": (
+                        _optional(protected_row.get("finding_count"))
+                        if protected_row
+                        else None
+                    ),
+                    "intersecting_count": (
+                        _optional(protected_row.get("intersecting_count"))
+                        if protected_row
+                        else None
+                    ),
+                    "legal_review_required": (
+                        bool(protected_row.get("legal_review_required"))
+                        if protected_row
+                        else None
+                    ),
+                    "max_overlap_ratio": (
+                        _optional(protected_row.get("max_overlap_ratio"))
+                        if protected_row
+                        else None
+                    ),
+                    "nearest_constraint_km": (
+                        _optional(protected_row.get("nearest_constraint_km"))
+                        if protected_row
+                        else None
+                    ),
+                },
+                "eplan": {
+                    "checked": False,
+                    "note": (
+                        "e-Plan zoning / active-plan evidence is still a "
+                        "separate unchecked channel."
+                    ),
+                },
+                "note": (
+                    "planning_legal becomes complete only after both protected-"
+                    "area/legal constraints and e-Plan zoning evidence are checked."
+                ),
             },
             "price": {
                 "known": False,
@@ -264,6 +363,8 @@ def build_evidence_packets(
                     row.get("nearest_catalyst_km")
                 ),
                 "sentinel_known": layer_known["sentinel_recent_change"],
+                "protected_area_checked": protected_checked,
+                "flood_checked": flood_checked,
                 "planning_known": False,
                 "price_known": False,
                 "evidence_coverage_pct": coverage_pct,
