@@ -47,6 +47,10 @@ def parser() -> argparse.ArgumentParser:
         default="data/output/planning_scan/planning_top30.csv",
     )
     p.add_argument(
+        "--kgm-highway",
+        default="data/output/kgm_highway_scan/kgm_highway_top30.csv",
+    )
+    p.add_argument(
         "--output-dir",
         default="data/output/evidence_packets",
     )
@@ -61,12 +65,14 @@ def main() -> int:
     landslide = Path(args.landslide)
     price = Path(args.price)
     planning = Path(args.planning)
+    kgm_highway = Path(args.kgm_highway)
     sentinel_arg = sentinel if sentinel.exists() else None
     protected_arg = protected if protected.exists() else None
     flood_arg = flood if flood.exists() else None
     landslide_arg = landslide if landslide.exists() else None
     price_arg = price if price.exists() else None
     planning_arg = planning if planning.exists() else None
+    kgm_highway_arg = kgm_highway if kgm_highway.exists() else None
 
     try:
         result = build_evidence_packets(
@@ -77,6 +83,7 @@ def main() -> int:
             landslide_csv=landslide_arg,
             price_csv=price_arg,
             planning_csv=planning_arg,
+            kgm_highway_csv=kgm_highway_arg,
             output_dir=args.output_dir,
         )
     except (FileNotFoundError, ValueError) as exc:
