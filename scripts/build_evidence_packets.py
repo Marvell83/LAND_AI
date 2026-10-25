@@ -27,6 +27,14 @@ def parser() -> argparse.ArgumentParser:
         default="data/output/sentinel_confirm/sentinel_top30_change.csv",
     )
     p.add_argument(
+        "--protected",
+        default="data/output/official_constraints/protected_area_top30.csv",
+    )
+    p.add_argument(
+        "--flood",
+        default="data/output/official_constraints/flood_risk_top30.csv",
+    )
+    p.add_argument(
         "--output-dir",
         default="data/output/evidence_packets",
     )
@@ -36,12 +44,18 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     sentinel = Path(args.sentinel)
+    protected = Path(args.protected)
+    flood = Path(args.flood)
     sentinel_arg = sentinel if sentinel.exists() else None
+    protected_arg = protected if protected.exists() else None
+    flood_arg = flood if flood.exists() else None
 
     try:
         result = build_evidence_packets(
             deep_scan_csv=args.deep_scan,
             sentinel_csv=sentinel_arg,
+            protected_csv=protected_arg,
+            flood_csv=flood_arg,
             output_dir=args.output_dir,
         )
     except (FileNotFoundError, ValueError) as exc:
