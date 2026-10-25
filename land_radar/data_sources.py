@@ -24,6 +24,8 @@ SOURCES = (
     DataSource("e-Plan official evidence registry", "planning", "Point-in-time plan lifecycle, finalized UIP/NIP verification and Top-30 planning scan", "registry_engine_ready"),
     DataSource("TUCBS / ULASAV plan WMS", "planning", "Verified regional CDP WMS context", "partial_service_registry_ready"),
     DataSource("Tarım ve Orman / USBS flood risk", "risk", "Official flood-risk polygon query", "direct_service_ready"),
+    DataSource("MTA / TUCBS landslide inventory", "risk", "Configurable WFS inventory screening for Top-30", "configurable_wfs_ready"),
+    DataSource("AFAD landslide susceptibility", "risk", "Restricted/not publicly configured susceptibility evidence", "restricted"),
     DataSource("AFAD / TUCBS / other official hazard export", "risk", "GeoJSON hazard registry, overlap, distance and explicit hard-veto", "manual_registry_ready"),
     DataSource("User / institutional comparable dataset", "price", "Robust local comparable distribution plus Top-30 batch evidence", "candidate_batch_ready"),
 )
