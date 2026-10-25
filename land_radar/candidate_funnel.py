@@ -111,6 +111,8 @@ def build_candidate_funnel(
             if hazard is not None
             else None
         )
+        if hazard is None:
+            reasons.append("hazard_unknown")
         if policy.exclude_hard_veto and hard_veto:
             status = "DROP"
             reasons.append("hard_veto_hazard")
