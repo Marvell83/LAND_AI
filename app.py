@@ -25,6 +25,11 @@ from land_radar.providers.ghsl import GHSLProviderError, compare_built_up, disco
 from land_radar.providers.aygm_rail import AYGMRailProviderError, fetch_rail_projects, filter_project_keywords, record_to_catalyst as rail_record_to_catalyst
 from land_radar.providers.osbuk import OSBUKProviderError, fetch_osb_list, filter_provinces, record_to_catalyst
 from land_radar.providers.osm import OSMProviderError, fetch_road_summary
+from land_radar.providers.kgm_highway import (
+    KGMHighwayProviderError,
+    fetch_highway_projects,
+    filter_project_keywords as filter_highway_keywords,
+)
 from land_radar.providers.osm_geometry import OSMGeometryProviderError, best_name_matches, fetch_industrial_geometries, fetch_rail_geometries, to_geometry_evidence
 from land_radar.providers.sentinel_surface import SentinelSurfaceClient, SentinelSurfaceError, compare_surface
 from land_radar.providers.arcgis_geojson import ArcGISGeoJSONError
@@ -618,6 +623,56 @@ with tab2:
                     "Bu sonuç e-Plan, AFAD/heyelan veya diğer hukukî katmanların temiz olduğu anlamına gelmez."
                 )
         except (ArcGISGeoJSONError, ValueError) as exc:
+            st.error(str(exc))
+
+    st.divider()
+    st.markdown("#### KGM Otoyol Projeleri · resmî statü")
+    st.caption(
+        "KGM proje detay sayfalarındaki açık ihale/sözleşme/yapım/açılış ifadelerini "
+        "muhafazakâr biçimde Catalyst Stage'e çevirir. Bu bölüm güzergâh geometrisi üretmez."
+    )
+    kgm_keywords_text = st.text_input(
+        "Pilot koridor KGM anahtar kelimeleri",
+        value="Çanakkale, Kınalı, Malkara, Savaştepe, Marmara, Akyazı, Bursa, Balıkesir",
+        key="kgm_highway_keywords",
+    )
+    if st.button("KGM otoyol proje statülerini getir", use_container_width=True):
+        try:
+            kgm_projects = fetch_highway_projects()
+            kgm_keywords = [
+                token.strip()
+                for token in kgm_keywords_text.split(",")
+                if token.strip()
+            ]
+            filtered_kgm = filter_highway_keywords(
+                kgm_projects,
+                kgm_keywords,
+            )
+            st.success(
+                f"KGM'den {len(kgm_projects)} proje okundu; "
+                f"{len(filtered_kgm)} proje pilot anahtar kelimeleriyle eşleşti."
+            )
+            st.dataframe(
+                [
+                    {
+                        "project_id": project.project_id,
+                        "name": project.name,
+                        "stage": int(project.stage),
+                        "stage_name": project.stage.name,
+                        "stage_claim": project.stage_claim,
+                        "observed_date": project.observed_date,
+                        "detail_url": project.detail_url,
+                    }
+                    for project in filtered_kgm
+                ],
+                use_container_width=True,
+                hide_index=True,
+            )
+            st.caption(
+                "KGM statüsü tek başına hücre mesafesi üretmez. Mekânsal etki için "
+                "aynı project_id ile doğrulanmış Geometry Registry kaydı gerekir."
+            )
+        except KGMHighwayProviderError as exc:
             st.error(str(exc))
 
 with tab3:
