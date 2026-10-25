@@ -37,6 +37,7 @@ Mevcut sürüm bir **çok-kaynaklı mekânsal araştırma çekirdeğidir**:
 - yerel azimuthal-equidistant projeksiyonla metre/km hesaplama
 - configurable spatial influence bands
 - statü kanıtı ile geometri kanıtını ayrı tutan Catalyst Spatial Link
+- GeoJSON Geometry Registry + batch cell linking
 - OSBÜK resmî OSB durum akışı
 - AYGM/UAB resmî demiryolu proje durum akışı
 - OSBÜK statüsü + OSM geometri adı için kontrollü aday eşleştirme
@@ -95,12 +96,13 @@ pytest -q
 8. Emsal fiyat + CPI/reel fiyat laboratuvarı ✅
 9. Evidence-backed risk modeli ✅
 10. Spatial Intelligence / catalyst geometry engine ✅
-11. OSB/demiryolu resmî güzergâh geometrisi veya doğrulanmış geometry registry
-12. KGM stratejik karayolu proje akışı
-13. Hard-risk resmî coğrafi katmanları
-14. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
-15. Backtest ve ağırlık kalibrasyonu
-16. 100 → 30 → 10 → parsel elemesi
+11. Geometry Registry + batch cell linking ✅
+12. OSB/demiryolu resmî güzergâh geometrisi / doğrulanmış geometry kaynakları
+13. KGM stratejik karayolu proje akışı
+14. Hard-risk resmî coğrafi katmanları
+15. Otomatik point-in-time fiyat veri hattı ve Mispricing kalibrasyonu
+16. Backtest ve ağırlık kalibrasyonu
+17. 100 → 30 → 10 → parsel elemesi
 
 ## Güvenilirlik kuralı
 
